@@ -1,3 +1,7 @@
+// MUST be the first import — auto-instrumentations patch modules at require
+// time, so anything imported before this is invisible to tracing.
+import './instrumentation';
+
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
