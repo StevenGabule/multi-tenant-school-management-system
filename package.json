@@ -2,8 +2,23 @@
   "name": "@org/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "_prisma": "dotenv -e .env.local -- prisma",
+    "prisma:gateway:migrate:init": "dotenv -e .env.local -- prisma migrate dev --schema apps/gateway/prisma/schema.prisma --name init",
+    "prisma:gateway:migrate": "dotenv -e .env.local -- prisma migrate dev --schema apps/gateway/prisma/schema.prisma",
+    "prisma:gateway:generate": "dotenv -e .env.local -- prisma generate --schema apps/gateway/prisma/schema.prisma",
+    "prisma:gateway:studio": "dotenv -e .env.local -- prisma studio --schema apps/gateway/prisma/schema.prisma"
+  },
   "private": true,
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "@nestjs/core",
+      "@parcel/watcher"
+    ]
+  },
   "devDependencies": {
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
@@ -16,17 +31,24 @@
     "@swc/core": "1.15.8",
     "@swc/helpers": "0.5.18",
     "@types/node": "20.19.9",
+    "@types/pg": "^8.20.0",
+    "dotenv-cli": "^11.0.0",
     "nx": "22.7.0",
     "prettier": "^3.8.1",
+    "prisma": "^7.8.0",
     "tslib": "^2.3.0",
     "typescript": "~5.9.2",
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "axios": "^1.6.0",
+    "pg": "^8.20.0",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0"
   }
