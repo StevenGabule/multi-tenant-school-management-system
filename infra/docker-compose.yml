@@ -1,0 +1,53 @@
+# Local development stack for the multi-tenant SMS.
+# Run from repo root:  docker compose -f infra/docker-compose.yml up -d
+#
+# Variables come from ../.env.local (gitignored). See .env.example for the schema.
+
+name: sms
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sms-postgres
+    restart: unless-stopped
+    env_file:
+      - ../.env.local
+    ports:
+      # Host 5433 -> container 5432 to avoid colliding with any native
+      # Postgres on the host. Update DATABASE_URL accordingly.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: sms-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC receiver
+      - "4318:4318"     # OTLP HTTP receiver
+
+  adminer:
+    image: adminer:4
+    container_name: sms-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "8081:8080"
+
+volumes:
+  postgres_data:
+    name: sms_postgres_data
