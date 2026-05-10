@@ -60,6 +60,9 @@ See [`adr/`](adr/) for the running log of decisions and their rationale.
 | # | Title | Status |
 |---|---|---|
 | [0001](adr/0001-tenancy-tier-model.md) | Tiered hybrid tenancy model (Pool / Bridge / Silo) | Accepted |
+| [0002](adr/0002-monorepo-tooling.md) | Use Nx as the monorepo build tool | Accepted |
+| [0003](adr/0003-ci-platform.md) | GitHub Actions for CI | Accepted |
+| [0004](adr/0004-prisma-7-setup.md) | Prisma 7 setup with prisma.config.ts and driver adapter | Accepted |
 
 ---
 

@@ -92,6 +92,9 @@ The "never edit accepted" rule is the most violated and the most important. The 
 | # | Title | Status |
 |---|---|---|
 | [0001](0001-tenancy-tier-model.md) | Tiered hybrid tenancy model | Accepted |
+| [0002](0002-monorepo-tooling.md) | Use Nx as the monorepo build tool | Accepted |
+| [0003](0003-ci-platform.md) | GitHub Actions for CI | Accepted |
+| [0004](0004-prisma-7-setup.md) | Prisma 7 setup with prisma.config.ts and driver adapter | Accepted |
 
 ---
 
