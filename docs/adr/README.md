@@ -96,6 +96,8 @@ The "never edit accepted" rule is the most violated and the most important. The 
 | [0003](0003-ci-platform.md) | GitHub Actions for CI | Accepted |
 | [0004](0004-prisma-7-setup.md) | Prisma 7 setup with prisma.config.ts and driver adapter | Accepted |
 | [0005](0005-rls-tenant-isolation.md) | PostgreSQL RLS with FORCE and SET LOCAL for tenant isolation | Accepted |
+| [0006](0006-registry-failure-mode.md) | Tenant registry failure mode is fail-closed | Accepted |
+| [0007](0007-control-plane-db-strategy.md) | Control-plane DB is a separate logical DB on the same Postgres cluster (Phase 1) | Accepted |
 
 ---
 
