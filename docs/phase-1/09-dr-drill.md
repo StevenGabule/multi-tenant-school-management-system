@@ -161,18 +161,36 @@ At least two:
 
 ## Definition of done
 
-- [ ] WAL archiving configured; segments visible in MinIO.
-- [ ] Daily base backups running on a schedule; encrypted with KMS.
-- [ ] Per-tenant logical backup tooling exists (even if unused for now).
-- [ ] DR runbook written and committed in `docs/runbooks/dr-restore.md`.
-- [ ] **Cold drill executed**: database dropped, restored from runbook only.
-- [ ] Actual RPO and RTO measured and documented.
-- [ ] Post-mortem written; at least three issues identified and fixed.
-- [ ] Restore tested on a *different* cluster than the source (a second kind cluster suffices).
-- [ ] Backup retention confirmed: 35-day lifecycle policy on the bucket.
-- [ ] Crypto-shredding script written for silo-tier tenants (preview).
-- [ ] Next drill scheduled in your calendar.
-- [ ] ADR-0018 (backup strategy) and ADR-0019 (DR tier targets) written.
+- [ ] WAL archiving configured; segments visible in MinIO. **Deferred to milestone 2.0** alongside the pgbackrest migration. Phase 1 ships pg_dump-based DR with no WAL replay; ADR-0019 documents the trade-off + the five graduation triggers that flip the decision.
+- [x] Daily base backups, encrypted via envelope (DEK wrapped by static KEK simulating KMS), pushed to MinIO. *(commit `feat(infra/backup): dr-backup.sh + dr-restore.sh`; verified end-to-end with the drill)*. **Cron schedule itself is deferred** — running on demand today; CronJob/compose-cron sidecar is mechanical.
+- [x] Per-tenant logical backup tooling exists. *(commit `feat(infra/backup): per-tenant logical backup tool`; SIS-aggregate scope; row-level filtering via RLS at restore time; full row-filtering-at-backup-time productization is the Phase 3 silo concern)*.
+- [x] DR runbook in `docs/runbooks/dr-restore.md`. *(commit `docs(runbook): DR restore procedure`; revised post-drill in `fix(infra/backup): drill-1 fixes` to add Step 3.5 grants + Step-5 nx-reset prereq + row-count verification)*.
+- [x] **Cold drill executed**. *(commit `docs(drill): cold drill #1`; sms_sis dropped + restored; RTO ~3 minutes from drop to verified-query-passes)*.
+- [x] Actual RPO + RTO measured + documented. *(post-mortem `docs/postmortems/2026-05-10-cold-drill-1.md`; ADR-0020 codifies the measured numbers + per-tier targets)*.
+- [x] Post-mortem written; **3 issues identified** (hash methodology, missing grants, nx daemon stale lock); all 3 fixed in `fix(infra/backup): drill-1 fixes`.
+- [~] Restore tested on a *different* cluster. **Procedure documented** in runbook Section 6 (cross-cluster restore via second compose Postgres container); **physical execution deferred to drill #2** scheduled for 2026-08-10.
+- [~] 35-day retention via bucket lifecycle. **Bucket has versioning ENABLED**; lifecycle policy not wired yet (MinIO supports it; the actual `mc ilm import` step is deferred to milestone 2.0 alongside the cron schedule + pgbackrest migration).
+- [x] Crypto-shredding script for silo tenants. *(commit `feat(infra/backup): crypto-shred-tenant-key.sh`; --create / --shred / --status; tested lifecycle end-to-end)*.
+- [~] Next drill scheduled. **2026-08-10 documented in the post-mortem's "Drill #2 — what we'll test that #1 didn't" section**. The actual calendar entry is the operator's habit, not a code artifact.
+- [x] ADR-0019 (backup strategy) and ADR-0020 (DR tier targets) written. *(numbers shifted from milestone-doc 0018/0019 because milestone 1.8 took those slots; cumulative renumbering pattern in each ADR)*.
+
+**End-to-end verified during this milestone:**
+
+The cold drill itself:
+  • Pre-drill snapshot at 14:55:35Z (24 students, 1 guardian, 2 links,
+    20 outbox events, 4 processed_requests in sms_sis).
+  • Fresh base backup taken at 14:55:47Z, pushed to MinIO encrypted.
+  • `DROP DATABASE sms_sis` at 14:55:55Z — no back-out.
+  • Restore via `dr-restore.sh` — 4 seconds of actual database work,
+    sha256 verified against manifest.
+  • Post-restore: row counts match exactly; RLS policies + SECURITY
+    DEFINER `app.is_guardian_of` + FORCE-RLS flag all intact.
+  • Smoke test (app_user with tenant context) returned the expected
+    1 visible student after re-applying GRANTs (issue #2 fix).
+  • Total RTO: ~3 minutes including diagnostic time on issue #2.
+
+Drill found 3 issues — exactly what milestone 1.9's framing
+anticipated. All addressable; all fixed in the same milestone.
 
 ---
 
