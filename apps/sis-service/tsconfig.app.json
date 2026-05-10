@@ -3,15 +3,18 @@
   "compilerOptions": {
     "outDir": "dist",
     "types": ["node"],
-    // No rootDir: webpack pulls in workspace lib source. See gateway's
-    // tsconfig.app.json for the explanation.
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "target": "es2021"
   },
   "include": ["src/**/*.ts"],
-  "exclude": [],
+  "exclude": [
+    "jest.config.ts",
+    "jest.config.cts",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ],
   "references": [
     {
       "path": "../../libs/tenant-registry/tsconfig.lib.json"
