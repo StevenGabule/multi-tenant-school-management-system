@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  labels:
+    app.kubernetes.io/name: gateway
+    app.kubernetes.io/part-of: sms-platform
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  OTEL_SERVICE_NAME: "gateway"
+  # The hostname `jaeger` resolves via the pod's hostAliases (see Deployment).
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+  OTEL_RESOURCE_ATTRIBUTES: "service.namespace=sms,deployment.environment=kind"
