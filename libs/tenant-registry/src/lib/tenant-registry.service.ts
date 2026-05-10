@@ -101,6 +101,9 @@ export class TenantRegistryService implements OnModuleInit, OnModuleDestroy {
     await Promise.all([this.redis.connect(), this.subRedis.connect()]);
     await this.subRedis.subscribe(this.channel);
     this.subRedis.on('message', (_ch, msg) => {
+      // Drop our process-local LRU. The Redis-shared cache is the
+      // publisher's responsibility (tenant-service deletes the key
+      // before publishing), so we don't need to del it here.
       this.lru.delete(msg);
       this.stat.invalidations++;
       this.logger.debug(`invalidated ${msg} (pub/sub)`);

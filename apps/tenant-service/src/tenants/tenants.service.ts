@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RegistryEventsService } from '../events/registry-events.service';
 import {
   TenantStatus,
   TenantTier,
@@ -36,17 +37,20 @@ export interface UpdateTenantInput {
  */
 @Injectable()
 export class TenantsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: RegistryEventsService,
+  ) {}
 
   async create(input: CreateTenantInput, actorId?: string): Promise<Tenant> {
-    return this.prisma.$transaction(async (tx) => {
+    const tenant = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.tenant.findUnique({
         where: { slug: input.slug },
       });
       if (existing) {
         throw new ConflictException(`tenant slug already in use: ${input.slug}`);
       }
-      const tenant = await tx.tenant.create({
+      const created = await tx.tenant.create({
         data: {
           name: input.name,
           slug: input.slug,
@@ -59,19 +63,22 @@ export class TenantsService {
       });
       await tx.tenantEvent.create({
         data: {
-          tenantId: tenant.id,
+          tenantId: created.id,
           type: 'created',
           payload: {
             name: input.name,
             slug: input.slug,
-            tier: tenant.tier,
-            region: tenant.region,
+            tier: created.tier,
+            region: created.region,
           },
           actorId: actorId ?? null,
         },
       });
-      return tenant;
+      return created;
     });
+    // Publish AFTER commit. Best-effort — TTL fallback covers Redis blips.
+    await this.events.publishInvalidation(tenant.id);
+    return tenant;
   }
 
   async list(): Promise<Tenant[]> {
@@ -93,10 +100,10 @@ export class TenantsService {
     patch: UpdateTenantInput,
     actorId?: string,
   ): Promise<Tenant> {
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.tenant.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(`tenant not found: ${id}`);
-      const updated = await tx.tenant.update({
+      const next = await tx.tenant.update({
         where: { id },
         data: { ...patch, version: { increment: 1 } },
       });
@@ -107,23 +114,25 @@ export class TenantsService {
           payload: {
             patch: patch as Record<string, unknown>,
             fromVersion: existing.version,
-            toVersion: updated.version,
+            toVersion: next.version,
           } as object,
           actorId: actorId ?? null,
         },
       });
-      return updated;
+      return next;
     });
+    await this.events.publishInvalidation(id);
+    return updated;
   }
 
   async suspend(id: string, reason?: string, actorId?: string): Promise<Tenant> {
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.tenant.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(`tenant not found: ${id}`);
       if (existing.status === TenantStatus.suspended) {
         return existing; // idempotent
       }
-      const updated = await tx.tenant.update({
+      const next = await tx.tenant.update({
         where: { id },
         data: {
           status: TenantStatus.suspended,
@@ -139,18 +148,20 @@ export class TenantsService {
           actorId: actorId ?? null,
         },
       });
-      return updated;
+      return next;
     });
+    await this.events.publishInvalidation(id);
+    return updated;
   }
 
   async activate(id: string, actorId?: string): Promise<Tenant> {
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.tenant.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(`tenant not found: ${id}`);
       if (existing.status === TenantStatus.active) {
         return existing; // idempotent
       }
-      const updated = await tx.tenant.update({
+      const next = await tx.tenant.update({
         where: { id },
         data: {
           status: TenantStatus.active,
@@ -166,7 +177,9 @@ export class TenantsService {
           actorId: actorId ?? null,
         },
       });
-      return updated;
+      return next;
     });
+    await this.events.publishInvalidation(id);
+    return updated;
   }
 }
