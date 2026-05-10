@@ -109,6 +109,8 @@ The "never edit accepted" rule is the most violated and the most important. The 
 | [0016](0016-rest-vs-graphql-bff.md) | REST + JSON for BFFs (with explicit GraphQL Federation triggers) | Accepted |
 | [0017](0017-otel-collector-architecture.md) | OpenTelemetry Collector as the central observability pipeline | Accepted |
 | [0018](0018-slo-and-alerting.md) | SLOs, error budgets, and alerting on symptoms | Accepted |
+| [0019](0019-backup-strategy.md) | Backup strategy — pg_dump for Phase 1, pgbackrest at scale | Accepted |
+| [0020](0020-dr-tier-targets.md) | DR tier targets — measured, not claimed | Accepted |
 
 ---
 
