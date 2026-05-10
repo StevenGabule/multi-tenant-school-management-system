@@ -1,0 +1,38 @@
+# Loki — single-instance dev config. Filesystem storage, no replication,
+# no compaction tier. Phase 2 would move to S3 + compactor + ruler.
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  log_level: info
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# OTLP intake — services emit OTLP logs to the collector, which
+# forwards via otlphttp/loki, which Loki receives at /otlp/v1/logs.
+limits_config:
+  allow_structured_metadata: true
+  volume_enabled: true
+
+ruler:
+  alertmanager_url: http://localhost:9093

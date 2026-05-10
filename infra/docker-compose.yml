@@ -45,16 +45,92 @@ services:
     volumes:
       - redis_data:/data
 
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: sms-jaeger
+  # =============================================================================
+  # Observability stack (milestone 1.8) — replaces the milestone 1.0 Jaeger
+  # all-in-one with the full {Collector → Tempo + Prometheus + Loki +
+  # Grafana} pipeline.
+  #
+  # Services emit OTLP to the collector (4317/4318); the collector fans out:
+  #   traces  → Tempo
+  #   metrics → Prometheus (via /metrics scrape on port 8889)
+  #   logs    → Loki (OTLP /otlp/v1/logs)
+  # =============================================================================
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: sms-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./observability/collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"     # OTLP gRPC receiver — services point here
+      - "4318:4318"     # OTLP HTTP receiver
+      - "8889:8889"     # Prometheus metrics endpoint (scrape target)
+    depends_on:
+      - tempo
+      - prometheus
+      - loki
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: sms-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    user: root
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"     # Tempo HTTP API (Grafana queries here)
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: sms-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
+      - --web.enable-lifecycle
+      - --enable-feature=exemplar-storage
+      - --enable-feature=native-histograms
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  loki:
+    image: grafana/loki:3.2.0
+    container_name: sms-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    user: root
+    volumes:
+      - ./observability/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: sms-grafana
     restart: unless-stopped
     environment:
-      COLLECTOR_OTLP_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
     ports:
-      - "16686:16686"   # Jaeger UI
-      - "4317:4317"     # OTLP gRPC receiver
-      - "4318:4318"     # OTLP HTTP receiver
+      - "3030:3000"     # 3030 host -> 3000 container (3000 is gateway)
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
 
   # Keycloak — IAM backbone for milestone 1.6 onward. OIDC provider that
   # issues access + refresh tokens, manages realm roles/groups, and
@@ -154,3 +230,11 @@ volumes:
     name: sms_postgres_data
   redis_data:
     name: sms_redis_data
+  tempo_data:
+    name: sms_tempo_data
+  prometheus_data:
+    name: sms_prometheus_data
+  loki_data:
+    name: sms_loki_data
+  grafana_data:
+    name: sms_grafana_data

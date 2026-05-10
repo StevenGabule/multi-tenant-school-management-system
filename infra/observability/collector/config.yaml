@@ -1,0 +1,156 @@
+# =============================================================================
+# OpenTelemetry Collector configuration — milestone 1.8.
+#
+# Architecture: services → collector → {Tempo, Prometheus, Loki}
+#
+# The collector is the SINGLE OTLP endpoint services point at. It owns
+# the cross-cutting concerns:
+#   • Sampling (tail_sampling — keep 100% of errors + slow traces)
+#   • PII redaction (attributes processor — strip sensitive keys)
+#   • Tenant attribute promotion (baggage → span attribute)
+#
+# Why central pipeline (not per-service direct export):
+#   1. Cross-cutting changes (e.g., a new redaction rule) ship in one
+#      collector reload, not N service deploys.
+#   2. Tail-based sampling needs to see traces complete — only the
+#      collector has that visibility.
+#   3. Backend-specific format conversion (Prometheus exposition,
+#      Loki's structured-JSON shape) lives in one place.
+# =============================================================================
+
+receivers:
+  # OTLP — what services send. Both gRPC (4317) and HTTP (4318) so we
+  # don't have to coordinate transport with every SDK.
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins: ['http://localhost:*']
+
+processors:
+  # Standard batch — every signal goes through this. The collector won't
+  # batch larger than this on a slow link, won't sit idle longer than
+  # this on a fast one.
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+
+  # Promote baggage values onto each span. The KeycloakAuthGuard sets
+  # `tenant.id` and `user.id` as baggage; this processor copies them as
+  # span attributes so Tempo's filter `{tenant.id="..."}` works.
+  #
+  # `from_context` reads baggage; `from_attribute` reads other span
+  # attributes. We do both so the path is robust against either source.
+  attributes/baggage:
+    actions:
+      - key: tenant.id
+        from_context: tenant.id
+        action: insert
+      - key: user.id
+        from_context: user.id
+        action: insert
+
+  # PII redaction. Defense in depth — services should already redact at
+  # source, but the collector is the backstop for what slipped through.
+  attributes/redact:
+    actions:
+      # HTTP request bodies are the #1 PII offender — debug logging,
+      # auto-instrumentation can capture full bodies. Just delete.
+      - key: http.request.body
+        action: delete
+      - key: http.response.body
+        action: delete
+      # User-identifying free-text fields. Hash if we want to count
+      # uniques without identifying; delete if we don't even need that.
+      - key: user.email
+        action: hash
+      - key: user.phone
+        action: hash
+      # Raw `password` / `token` / `secret` keys — emergency catch-all.
+      - key: password
+        action: delete
+      - key: token
+        action: delete
+      - key: secret
+        action: delete
+
+  # Tail-based sampling — KEEP every error, every slow trace, plus a
+  # small fraction of successful traces. Why this matters: head-based
+  # uniform sampling at 1% drops 99% of error traces (the ones we
+  # actually need). Tail-based decides AFTER the trace is complete.
+  #
+  # decision_wait must exceed the longest-expected trace. 5s covers the
+  # current saga's worst-case (3 retries × ~1.5s).
+  tail_sampling:
+    decision_wait: 5s
+    num_traces: 50000
+    expected_new_traces_per_sec: 100
+    policies:
+      # 100% of error traces. Non-negotiable.
+      - name: errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      # 100% of slow traces (>500ms). The latency-investigation lever.
+      - name: slow
+        type: latency
+        latency:
+          threshold_ms: 500
+      # 5% of normal traces — keeps a sample of healthy paths so
+      # baselining queries (p50, p99 trends) have data.
+      - name: random
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 5
+
+exporters:
+  # Tempo via OTLP (HTTP). Tempo's API accepts OTLP natively as of v2.
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Prometheus exporter — exposes /metrics on the collector for
+  # Prometheus to scrape. Trade-off vs `prometheusremotewrite`: scrape
+  # is simpler, requires no auth, and works for local dev. Phase 2
+  # might switch to remote-write for cardinality control.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: sms
+    const_labels:
+      env: local
+    # Send histograms as native Prometheus histograms (faster + smaller
+    # than the legacy `_bucket` series). Requires Prometheus 2.40+.
+    send_timestamps: true
+
+  # Loki — receives OTLP logs. Loki 3.x has a native OTLP receiver at
+  # /otlp/v1/logs; the otlphttp exporter targets it directly.
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+  # Stdout for debugging the collector itself.
+  debug:
+    verbosity: basic
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [attributes/baggage, attributes/redact, tail_sampling, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [attributes/baggage, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [attributes/baggage, attributes/redact, batch]
+      exporters: [otlphttp/loki]
