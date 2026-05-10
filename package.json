@@ -7,7 +7,11 @@
     "prisma:gateway:migrate:init": "dotenv -e .env.local -- prisma migrate dev --schema apps/gateway/prisma/schema.prisma --name init",
     "prisma:gateway:migrate": "dotenv -e .env.local -- prisma migrate dev --schema apps/gateway/prisma/schema.prisma",
     "prisma:gateway:generate": "dotenv -e .env.local -- prisma generate --schema apps/gateway/prisma/schema.prisma",
-    "prisma:gateway:studio": "dotenv -e .env.local -- prisma studio --schema apps/gateway/prisma/schema.prisma"
+    "prisma:gateway:studio": "dotenv -e .env.local -- prisma studio --schema apps/gateway/prisma/schema.prisma",
+    "prisma:tenant-service:migrate:init": "dotenv -e .env.local -- prisma migrate dev --config prisma.tenant-service.config.ts --name init",
+    "prisma:tenant-service:migrate": "dotenv -e .env.local -- prisma migrate dev --config prisma.tenant-service.config.ts",
+    "prisma:tenant-service:generate": "dotenv -e .env.local -- prisma generate --config prisma.tenant-service.config.ts",
+    "prisma:tenant-service:studio": "dotenv -e .env.local -- prisma studio --config prisma.tenant-service.config.ts"
   },
   "private": true,
   "pnpm": {

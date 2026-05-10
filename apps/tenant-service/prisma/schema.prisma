@@ -1,0 +1,131 @@
+// Control-plane schema for tenant-service.
+//
+// This DB is NOT under RLS. The tenant table is the registry — every
+// other service consults it. Access control here is service-layer
+// authentication (milestone 1.6 adds platform-admin role), not row-level.
+//
+// See ADR-0007 for why control plane is a separate database.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TenantTier {
+  pool
+  bridge
+  silo
+}
+
+enum TenantStatus {
+  pending
+  active
+  suspended
+  migrating
+  terminated
+}
+
+model Tenant {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String       @unique
+  tier        TenantTier   @default(pool)
+  region      String       @default("us-east-1")
+  status      TenantStatus @default(active)
+  // dsn is populated only for silo-tier tenants (their own Postgres).
+  // Pool/Bridge tenants share the regional cluster — null here.
+  dsn         String?
+  // Monotonic version bumped on every mutation. Cache consumers compare
+  // versions to detect staleness; future Phase 3 silo-tier tenant promotion
+  // uses it to invalidate routed PrismaClient instances.
+  version     Int          @default(1)
+  planId      String?      @db.Uuid
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  suspendedAt DateTime?
+
+  plan      Plan?         @relation(fields: [planId], references: [id])
+  districts District[]
+  flags     FeatureFlag[]
+  events    TenantEvent[]
+
+  @@index([region, status])
+  @@map("tenant")
+}
+
+model District {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schools School[]
+
+  @@index([tenantId])
+  @@map("district")
+}
+
+model School {
+  id         String   @id @default(uuid()) @db.Uuid
+  districtId String   @db.Uuid
+  name       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@index([districtId])
+  @@map("school")
+}
+
+model Plan {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String   @unique
+  features   Json     @default("{}")
+  rateLimits Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenants Tenant[]
+
+  @@map("plan")
+}
+
+model FeatureFlag {
+  id        String   @id @default(uuid()) @db.Uuid
+  // nullable tenantId means the flag is global (applies to all tenants
+  // unless overridden by a per-tenant row with the same key).
+  tenantId  String?  @db.Uuid
+  key       String
+  enabled   Boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([key])
+  @@map("feature_flag")
+}
+
+model TenantEvent {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @db.Uuid
+  // Append-only audit trail. Future analytics / debugging reads from here.
+  // Examples: "created", "suspended", "tier_changed", "plan_changed", etc.
+  type     String
+  payload  Json     @default("{}")
+  actorId  String?  @db.Uuid
+  at       DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, at])
+  @@map("tenant_event")
+}
