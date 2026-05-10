@@ -207,6 +207,9 @@ importers:
       '@nestjs/platform-express':
         specifier: ^11.0.0
         version: 11.1.19(@nestjs/common@11.1.19(reflect-metadata@0.1.14)(rxjs@7.8.1))(@nestjs/core@11.1.19)
+      '@org/auth-keycloak':
+        specifier: workspace:*
+        version: link:../../libs/auth-keycloak
       '@org/tenant-registry':
         specifier: workspace:*
         version: link:../../libs/tenant-registry
@@ -237,6 +240,9 @@ importers:
       '@nestjs/platform-express':
         specifier: ^11.0.0
         version: 11.1.19(@nestjs/common@11.1.19(reflect-metadata@0.1.14)(rxjs@7.8.1))(@nestjs/core@11.1.19)
+      '@org/auth-keycloak':
+        specifier: workspace:*
+        version: link:../../libs/auth-keycloak
       '@org/tenant-registry':
         specifier: workspace:*
         version: link:../../libs/tenant-registry
@@ -267,6 +273,9 @@ importers:
       '@nestjs/platform-express':
         specifier: ^11.0.0
         version: 11.1.19(@nestjs/common@11.1.19(reflect-metadata@0.1.14)(rxjs@7.8.1))(@nestjs/core@11.1.19)
+      '@org/auth-keycloak':
+        specifier: workspace:*
+        version: link:../../libs/auth-keycloak
       '@org/tenant-registry':
         specifier: workspace:*
         version: link:../../libs/tenant-registry
@@ -300,6 +309,9 @@ importers:
       '@nestjs/platform-express':
         specifier: ^11.0.0
         version: 11.1.19(@nestjs/common@11.1.19(reflect-metadata@0.1.14)(rxjs@7.8.1))(@nestjs/core@11.1.19)
+      '@org/auth-keycloak':
+        specifier: workspace:*
+        version: link:../../libs/auth-keycloak
       '@org/tenant-registry':
         specifier: workspace:*
         version: link:../../libs/tenant-registry

@@ -11,7 +11,8 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtAuthGuard, SmsJwtPayload } from '../auth/jwt-auth.guard';
+import { AuthenticatedPrincipal, KeycloakAuthGuard } from '@org/auth-keycloak';
+import { BadRequestException } from '@nestjs/common';
 import { IdempotencyInterceptor } from '../common/idempotency.interceptor';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfirmEnrollmentDto } from './enrollments.dtos';
@@ -32,7 +33,7 @@ import { ConfirmEnrollmentDto } from './enrollments.dtos';
  * separate aggregates.
  */
 @Controller('enrollments')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class EnrollmentsController {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -41,9 +42,9 @@ export class EnrollmentsController {
   @UseInterceptors(IdempotencyInterceptor)
   async confirm(
     @Body() body: ConfirmEnrollmentDto,
-    @Req() req: { user: SmsJwtPayload },
+    @Req() req: { user: AuthenticatedPrincipal },
   ): Promise<{ id: string; status: string }> {
-    const tenantId = req.user.tenantId;
+    const tenantId = requireTenant(req.user);
     return this.prisma.withTenant(tenantId, async (tx) => {
       const row = await tx.enrollment.create({
         data: {
@@ -62,9 +63,9 @@ export class EnrollmentsController {
   @UseInterceptors(IdempotencyInterceptor)
   async cancel(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Req() req: { user: SmsJwtPayload },
+    @Req() req: { user: AuthenticatedPrincipal },
   ): Promise<void> {
-    const tenantId = req.user.tenantId;
+    const tenantId = requireTenant(req.user);
     await this.prisma.withTenant(tenantId, async (tx) => {
       const row = await tx.enrollment.findUnique({ where: { id } });
       if (!row) {
@@ -77,4 +78,19 @@ export class EnrollmentsController {
       await tx.enrollment.delete({ where: { id } });
     });
   }
+}
+
+/**
+ * Service-account tokens (azp=services) authenticate but don't carry
+ * tenant_id — they need to declare the tenant per-request. For now,
+ * enrollment endpoints require a tenant, so reject service tokens
+ * lacking one. Future milestones may accept tenant in body.
+ */
+function requireTenant(user: AuthenticatedPrincipal): string {
+  if (!user.tenantId) {
+    throw new BadRequestException(
+      'tenant context required (token has no tenant_id claim)',
+    );
+  }
+  return user.tenantId;
 }

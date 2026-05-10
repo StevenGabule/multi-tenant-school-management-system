@@ -84,7 +84,8 @@
     "@org/tenant-registry": "workspace:*",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "@org/auth-keycloak": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0"

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -10,7 +11,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, SmsJwtPayload } from '../auth/jwt-auth.guard';
+import { AuthenticatedPrincipal, KeycloakAuthGuard } from '@org/auth-keycloak';
 import { PrismaService } from '../prisma/prisma.service';
 import { EnrollmentSaga } from '../sagas/enrollment.saga';
 import { StartEnrollmentDto } from './enrollments.dtos';
@@ -50,11 +51,11 @@ interface EnrollmentView {
  *     → operator surface; returns full per-step state. This is what an
  *       admin or oncall engineer reaches for first when a saga is wedged.
  *
- * Tenant isolation: JwtAuthGuard puts tenantId in CLS; withTenant sets
- * the GUC for the transaction. Cross-tenant reads are blocked by RLS.
+ * Tenant isolation: KeycloakAuthGuard puts tenantId in CLS; withTenant
+ * sets the GUC for the transaction. Cross-tenant reads are blocked by RLS.
  */
 @Controller('enrollments')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class EnrollmentsController {
   constructor(
     private readonly prisma: PrismaService,
@@ -65,14 +66,14 @@ export class EnrollmentsController {
   @HttpCode(202)
   async start(
     @Body() body: StartEnrollmentDto,
-    @Req() req: { user: SmsJwtPayload },
+    @Req() req: { user: AuthenticatedPrincipal },
   ): Promise<{
     id: string;
     status: string;
     currentStep: number;
     totalSteps: number;
   }> {
-    const tenantId = req.user.tenantId;
+    const tenantId = requireTenant(req.user);
     const totalSteps = this.enrollmentSaga.steps.length;
     return this.prisma.withTenant(tenantId, async (tx) => {
       const saga = await tx.sagaInstance.create({
@@ -110,9 +111,9 @@ export class EnrollmentsController {
   @Get(':id')
   async get(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Req() req: { user: SmsJwtPayload },
+    @Req() req: { user: AuthenticatedPrincipal },
   ): Promise<EnrollmentView> {
-    const tenantId = req.user.tenantId;
+    const tenantId = requireTenant(req.user);
     return this.prisma.withTenant(tenantId, async (tx) => {
       const saga = await tx.sagaInstance.findUnique({
         where: { id },
@@ -146,4 +147,13 @@ export class EnrollmentsController {
       };
     });
   }
+}
+
+function requireTenant(user: AuthenticatedPrincipal): string {
+  if (!user.tenantId) {
+    throw new BadRequestException(
+      'tenant context required (token has no tenant_id claim)',
+    );
+  }
+  return user.tenantId;
 }

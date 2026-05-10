@@ -12,7 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../../auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from '@org/auth-keycloak';
 import { IdempotencyInterceptor } from '../../../common/idempotency.interceptor';
 import { CreateStudentUseCase } from '../application/create-student.use-case';
 import {
@@ -44,7 +44,7 @@ import { toStudentResponse } from './student.presenter';
  */
 @ApiTags('students')
 @Controller('students')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class StudentsController {
   constructor(
     private readonly create: CreateStudentUseCase,

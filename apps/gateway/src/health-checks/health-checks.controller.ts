@@ -6,7 +6,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { KeycloakAuthGuard } from '@org/auth-keycloak';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface CreateCheckBody {
@@ -27,7 +27,7 @@ interface CreateCheckBody {
  * Prisma without a tenant, RLS at the DB blocks everything.
  */
 @Controller('health-checks')
-@UseGuards(JwtAuthGuard)
+@UseGuards(KeycloakAuthGuard)
 export class HealthChecksController {
   constructor(private readonly prisma: PrismaService) {}
 

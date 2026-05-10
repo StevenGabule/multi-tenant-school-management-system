@@ -1,25 +1,20 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
-import { JwtAuthGuard } from './jwt-auth.guard';
+import { KeycloakModule } from '@org/auth-keycloak';
 
-// No DevTokensController here — tokens are minted by the gateway's
-// /api/dev/token endpoint. sis-service only VERIFIES tokens (using the
-// same JWT_SECRET via env), never issues them.
+// Auth backbone for milestone 1.6+. Wraps the shared @org/auth-keycloak
+// lib for sis-service. Same shape across every service in the workspace.
 
 @Module({
   imports: [
-    JwtModule.registerAsync({
+    KeycloakModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.getOrThrow<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '15m', issuer: 'sms-gateway' },
-        verifyOptions: { issuer: 'sms-gateway' },
+        issuerUrl: config.getOrThrow<string>('KEYCLOAK_ISSUER_URL'),
+        audience: config.getOrThrow<string>('KEYCLOAK_AUDIENCE'),
       }),
     }),
   ],
-  providers: [JwtAuthGuard],
-  exports: [JwtAuthGuard, JwtModule],
 })
 export class AuthModule {}

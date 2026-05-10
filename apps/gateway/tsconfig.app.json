@@ -21,6 +21,9 @@
   ],
   "references": [
     {
+      "path": "../../libs/auth-keycloak/tsconfig.lib.json"
+    },
+    {
       "path": "../../libs/tenant-registry/tsconfig.lib.json"
     }
   ]
