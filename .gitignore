@@ -6,6 +6,7 @@ node_modules/
 dist/
 build/
 out/
+out-tsc/
 tmp/
 *.tsbuildinfo
 
@@ -55,3 +56,5 @@ Thumbs.db
 # Kubernetes secret manifests — never commit
 infra/k8s/**/secret.yaml
 infra/k8s/**/secrets.yaml
+
+test-output

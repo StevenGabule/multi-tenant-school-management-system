@@ -2,39 +2,68 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
 permissions:
-  actions: read
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  main:
+  ci:
+    name: build, typecheck, test, dockerize
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          filter: tree:0
+          # Full history needed so `nx affected` can compare base..head on PRs
           fetch-depth: 0
 
-      # This enables task distribution via Nx Cloud
-      # Run this command as early as possible, before dependencies are installed
-      # Learn more at https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      - run: npx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="e2e-ci"
-
-      # Cache node_modules
-      - uses: actions/setup-node@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          version: 10.29.1
 
-      - run: npm ci
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
 
-      # Prepend any command with "nx record --" to record its logs to Nx Cloud
-      - run: npx nx record -- npx nx format:check  --base="remotes/origin/main"
-      - run: npx nx run-many -t lint test build typecheck e2e-ci
-      # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
-      - run: npx nx fix-ci
-        if: always()
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        # Prisma 7 validates DATABASE_URL even for codegen; placeholder is fine.
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@placeholder/placeholder
+        run: pnpm exec prisma generate --schema apps/gateway/prisma/schema.prisma
+
+      - name: Derive nx base/head SHAs (PR only)
+        if: github.event_name == 'pull_request'
+        uses: nrwl/nx-set-shas@v4
+
+      - name: typecheck, test, build
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm exec nx affected -t typecheck test build \
+              --parallel=3 --exclude=@org/gateway-e2e
+          else
+            pnpm exec nx run-many -t typecheck test build \
+              --parallel=3 --exclude=@org/gateway-e2e
+          fi
+
+      - name: Build gateway docker image
+        run: docker build -t sms-gateway:ci -f apps/gateway/Dockerfile .
+
+      - name: Report image size
+        run: |
+          SIZE=$(docker images sms-gateway:ci --format '{{.Size}}')
+          echo "::notice title=Gateway image size::$SIZE"
+          docker images sms-gateway:ci
