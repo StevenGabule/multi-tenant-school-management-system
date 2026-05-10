@@ -105,6 +105,8 @@ The "never edit accepted" rule is the most violated and the most important. The 
 | [0012](0012-saga-state-storage.md) | Saga state in Postgres (with explicit graduation triggers to Temporal) | Accepted |
 | [0013](0013-iam-backbone.md) | Keycloak as the IAM backbone | Accepted |
 | [0014](0014-realm-strategy.md) | Single realm with `tenant_id` claim (vs realm-per-tenant) | Accepted |
+| [0015](0015-bff-pattern.md) | Backend-for-Frontend per persona (vs shared API) | Accepted |
+| [0016](0016-rest-vs-graphql-bff.md) | REST + JSON for BFFs (with explicit GraphQL Federation triggers) | Accepted |
 
 ---
 
