@@ -107,6 +107,8 @@ The "never edit accepted" rule is the most violated and the most important. The 
 | [0014](0014-realm-strategy.md) | Single realm with `tenant_id` claim (vs realm-per-tenant) | Accepted |
 | [0015](0015-bff-pattern.md) | Backend-for-Frontend per persona (vs shared API) | Accepted |
 | [0016](0016-rest-vs-graphql-bff.md) | REST + JSON for BFFs (with explicit GraphQL Federation triggers) | Accepted |
+| [0017](0017-otel-collector-architecture.md) | OpenTelemetry Collector as the central observability pipeline | Accepted |
+| [0018](0018-slo-and-alerting.md) | SLOs, error budgets, and alerting on symptoms | Accepted |
 
 ---
 
