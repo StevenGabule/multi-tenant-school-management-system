@@ -1,0 +1,50 @@
+# Version control
+.git
+.gitignore
+
+# Editor / OS
+.vscode
+.idea
+*.swp
+.DS_Store
+Thumbs.db
+
+# Build artifacts (will be rebuilt inside the image)
+**/node_modules
+**/dist
+**/build
+**/coverage
+.nx/cache
+.nx/workspace-data
+**/generated/prisma
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# Environment files — never bake credentials into images
+.env
+.env.local
+.env.*.local
+
+# Local dev / docs (not part of the runtime artifact)
+.dockerignore
+infra/
+docs/
+documentation.md
+CONTEXT.md
+*.md
+LICENSE
+
+# AI tooling configs (also not runtime)
+.agents/
+.claude/
+.codex/
+.cursor/
+.gemini/
+.opencode/
+opencode.json
+AGENTS.md
+CLAUDE.md
