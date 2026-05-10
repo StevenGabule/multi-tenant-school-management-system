@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
@@ -8,6 +9,7 @@ async function bootstrap() {
   app.setGlobalPrefix(globalPrefix, {
     exclude: ['livez', 'readyz'],
   });
+  app.useGlobalPipes(new ZodValidationPipe());
   app.enableShutdownHooks();
   const port = process.env.ACADEMIC_SERVICE_PORT ?? process.env.PORT ?? 3003;
   await app.listen(port);

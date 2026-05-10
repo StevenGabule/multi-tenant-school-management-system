@@ -31,6 +31,45 @@ model EnrollmentSlot {
   @@map("enrollment_slot")
 }
 
+// Confirmed enrollment created synchronously by the saga's
+// confirm-enrollment step (POST /api/enrollments). Distinct from
+// EnrollmentSlot (which is the placeholder created async via the event
+// consumer). The two evolve toward a unified model in milestone 1.4+
+// once class assignment + course catalog are real.
+//
+// classId is currently a UUID with no FK (no Class table yet) — that's
+// fine for milestone 1.5 where class assignment is being demonstrated
+// pattern-first; a real Class table arrives later.
+model Enrollment {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  studentId String   @db.Uuid
+  classId   String   @db.Uuid
+  status    String   @default("confirmed") // confirmed|cancelled
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, classId])
+  @@map("enrollment")
+}
+
+// HTTP idempotency table — same shape and rationale as sis-service's.
+// Used by IdempotencyInterceptor on POST/DELETE /api/enrollments.
+model ProcessedRequest {
+  tenantId       String    @db.Uuid
+  idempotencyKey String
+  statusCode     Int
+  responseBody   Json
+  status         String
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@id([tenantId, idempotencyKey])
+  @@index([createdAt])
+  @@map("processed_request")
+}
+
 // Idempotency record for the StudentEventsConsumer (and any future
 // consumers in this service). NOT tenant-scoped — this is infrastructure
 // bookkeeping, not application data. The relay can re-deliver the same

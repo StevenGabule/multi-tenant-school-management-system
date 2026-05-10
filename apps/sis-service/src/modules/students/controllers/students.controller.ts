@@ -9,9 +9,11 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../auth/jwt-auth.guard';
+import { IdempotencyInterceptor } from '../../../common/idempotency.interceptor';
 import { CreateStudentUseCase } from '../application/create-student.use-case';
 import {
   FindStudentByIdUseCase,
@@ -55,6 +57,7 @@ export class StudentsController {
 
   @Post()
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
   async createOne(@Body() body: CreateStudentDto) {
     const student = await this.create.execute(body);
     return toStudentResponse(student);
@@ -84,6 +87,7 @@ export class StudentsController {
 
   @Delete(':id')
   @HttpCode(204)
+  @UseInterceptors(IdempotencyInterceptor)
   async remove(@Param('id') id: string): Promise<void> {
     await this.softDelete.execute(id);
   }
