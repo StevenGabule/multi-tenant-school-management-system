@@ -8,6 +8,12 @@
     },
     {
       "path": "./apps/gateway"
+    },
+    {
+      "path": "./apps/tenant-service-e2e"
+    },
+    {
+      "path": "./apps/tenant-service"
     }
   ]
 }

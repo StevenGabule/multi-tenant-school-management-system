@@ -25,6 +25,22 @@ services:
       retries: 10
       start_period: 10s
 
+  redis:
+    image: redis:7-alpine
+    container_name: sms-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      # Host 6380 -> container 6379, same reason as postgres on 5433
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: sms-jaeger
@@ -88,3 +104,5 @@ services:
 volumes:
   postgres_data:
     name: sms_postgres_data
+  redis_data:
+    name: sms_redis_data
