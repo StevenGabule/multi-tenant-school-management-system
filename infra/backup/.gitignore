@@ -3,3 +3,4 @@
 # IAM-controlled access. Local dev: a random 32-byte file is fine, but
 # we still keep it out of git so a fork doesn't share keys.
 dev-kek.bin
+tenant-keks/
