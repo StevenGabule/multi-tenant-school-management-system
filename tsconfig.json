@@ -17,6 +17,12 @@
     },
     {
       "path": "./libs/tenant-registry"
+    },
+    {
+      "path": "./apps/sis-service-e2e"
+    },
+    {
+      "path": "./apps/sis-service"
     }
   ]
 }

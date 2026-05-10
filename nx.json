@@ -55,7 +55,7 @@
       "options": {
         "targetName": "test"
       },
-      "exclude": ["apps/tenant-service-e2e/**/*"]
+      "exclude": ["apps/tenant-service-e2e/**/*", "apps/sis-service-e2e/**/*"]
     }
   ],
   "analytics": false,
