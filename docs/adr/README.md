@@ -99,6 +99,8 @@ The "never edit accepted" rule is the most violated and the most important. The 
 | [0006](0006-registry-failure-mode.md) | Tenant registry failure mode is fail-closed | Accepted |
 | [0007](0007-control-plane-db-strategy.md) | Control-plane DB is a separate logical DB on the same Postgres cluster (Phase 1) | Accepted |
 | [0008](0008-clean-architecture-layering.md) | Clean architecture layering for sis-service (and every domain service after) | Accepted |
+| [0009](0009-transactional-outbox-pattern.md) | Transactional outbox for cross-service event publishing | Accepted |
+| [0010](0010-listen-notify-transport.md) | Postgres LISTEN/NOTIFY as the Phase 1 event transport | Accepted |
 
 ---
 
