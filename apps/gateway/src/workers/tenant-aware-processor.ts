@@ -78,16 +78,13 @@ export abstract class TenantAwareProcessor<
       );
     }
 
-    return this.cls.runWith(
-      {
-        tenantId: payload.tenantId,
-        userId: payload.userId,
-        requestId: payload.requestId,
-      },
-      async () =>
-        this.prisma.withTenant(payload.tenantId, (tx) =>
-          this.process(payload, tx),
-        ),
-    );
+    return this.cls.run(async () => {
+      this.cls.set('tenantId', payload.tenantId);
+      if (payload.userId) this.cls.set('userId', payload.userId);
+      if (payload.requestId) this.cls.set('requestId', payload.requestId);
+      return this.prisma.withTenant(payload.tenantId, (tx) =>
+        this.process(payload, tx),
+      );
+    });
   }
 }

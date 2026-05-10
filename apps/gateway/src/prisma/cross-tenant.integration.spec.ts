@@ -66,13 +66,10 @@ describe('Cross-tenant isolation (RLS integration)', () => {
       await migrationClient.query(sql);
     }
 
-    // Seed two tenants
-    await migrationClient.query(
-      `INSERT INTO tenant (id, name, slug, "updatedAt") VALUES
-        ($1, 'Tenant A', 'a', NOW()),
-        ($2, 'Tenant B', 'b', NOW())`,
-      [TENANT_A_ID, TENANT_B_ID],
-    );
+    // No tenant seeding: as of milestone 1.2 the tenant table moved to
+    // tenant-service (sms_control DB) and gateway's health_check.tenantId
+    // is now a logical reference (no FK). The UUIDs above are therefore
+    // arbitrary — RLS only cares that they match the GUC.
 
     // Connect as the non-superuser role for all assertions below.
     appClient = new Client({

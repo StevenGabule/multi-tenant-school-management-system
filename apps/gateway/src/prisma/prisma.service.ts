@@ -63,8 +63,9 @@ export class PrismaService
         `withTenant requires a valid UUID tenantId; got "${tenantId}"`,
       );
     }
-    return this.cls.runWith({ tenantId }, async () =>
-      this.$transaction(async (tx) => {
+    return this.cls.run(async () => {
+      this.cls.set('tenantId', tenantId);
+      return this.$transaction(async (tx) => {
         // Postgres custom GUCs accept arbitrary text — our UUID regex above
         // is the input gate. We use $executeRawUnsafe because the RHS must
         // be a literal (parameters aren't allowed for SET).
@@ -72,8 +73,8 @@ export class PrismaService
           `SET LOCAL app.current_tenant_id = '${tenantId}'`,
         );
         return fn(tx);
-      }),
-    );
+      });
+    });
   }
 
   /**

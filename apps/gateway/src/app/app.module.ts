@@ -6,7 +6,9 @@ import { AuthModule } from '../auth/auth.module';
 import { HealthChecksModule } from '../health-checks/health-checks.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { HealthModule } from '../health/health.module';
-import { TenantsModule } from '../tenants/tenants.module';
+
+// Tenant CRUD lives in tenant-service (sms_control DB) as of milestone 1.2.
+// Gateway used to host POST /api/tenants etc. — those endpoints have moved.
 
 @Module({
   imports: [
@@ -21,7 +23,6 @@ import { TenantsModule } from '../tenants/tenants.module';
     AuthModule,
     PrismaModule,
     HealthModule,
-    TenantsModule,
     HealthChecksModule,
   ],
   controllers: [AppController],

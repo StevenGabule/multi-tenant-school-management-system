@@ -104,7 +104,11 @@ export class TenantsService {
         data: {
           tenantId: id,
           type: 'updated',
-          payload: { patch, fromVersion: existing.version, toVersion: updated.version },
+          payload: {
+            patch: patch as Record<string, unknown>,
+            fromVersion: existing.version,
+            toVersion: updated.version,
+          } as object,
           actorId: actorId ?? null,
         },
       });

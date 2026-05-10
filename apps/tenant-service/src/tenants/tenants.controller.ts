@@ -9,9 +9,9 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import {
+import { TenantsService } from './tenants.service';
+import type {
   CreateTenantInput,
-  TenantsService,
   UpdateTenantInput,
 } from './tenants.service';
 

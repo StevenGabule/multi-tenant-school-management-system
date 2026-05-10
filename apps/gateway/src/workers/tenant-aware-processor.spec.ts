@@ -21,7 +21,7 @@ class DemoProcessor extends TenantAwareProcessor<DemoPayload> {
 
 describe('TenantAwareProcessor', () => {
   let prisma: { withTenant: jest.Mock };
-  let cls: { runWith: jest.Mock };
+  let cls: { run: jest.Mock; set: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -30,7 +30,9 @@ describe('TenantAwareProcessor', () => {
       ),
     };
     cls = {
-      runWith: jest.fn(async (_ctx: unknown, fn: () => unknown) => fn()),
+      // The new pattern: cls.run(fn) opens a context, then cls.set(...) to populate.
+      run: jest.fn(async (fn: () => unknown) => fn()),
+      set: jest.fn(),
     };
   });
 
@@ -43,7 +45,8 @@ describe('TenantAwareProcessor', () => {
       proc.run({ echo: 'hi' } as unknown as DemoPayload),
     ).rejects.toThrow(/missing tenantId/);
     expect(prisma.withTenant).not.toHaveBeenCalled();
-    expect(cls.runWith).not.toHaveBeenCalled();
+    expect(cls.run).not.toHaveBeenCalled();
+    expect(cls.set).not.toHaveBeenCalled();
   });
 
   it('seeds CLS and opens withTenant before calling process', async () => {
@@ -59,14 +62,14 @@ describe('TenantAwareProcessor', () => {
     });
 
     expect(result).toEqual({ ok: true, echo: 'hello' });
-    expect(cls.runWith).toHaveBeenCalledWith(
-      {
-        tenantId: '11111111-1111-1111-1111-111111111111',
-        userId: 'user-1',
-        requestId: 'req-1',
-      },
-      expect.any(Function),
+    // cls.run opens a fresh context, then cls.set is called per key
+    expect(cls.run).toHaveBeenCalledTimes(1);
+    expect(cls.set).toHaveBeenCalledWith(
+      'tenantId',
+      '11111111-1111-1111-1111-111111111111',
     );
+    expect(cls.set).toHaveBeenCalledWith('userId', 'user-1');
+    expect(cls.set).toHaveBeenCalledWith('requestId', 'req-1');
     expect(prisma.withTenant).toHaveBeenCalledWith(
       '11111111-1111-1111-1111-111111111111',
       expect.any(Function),
