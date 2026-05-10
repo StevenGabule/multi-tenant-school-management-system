@@ -35,6 +35,9 @@
     },
     {
       "path": "./apps/enrollment-service"
+    },
+    {
+      "path": "./libs/auth-keycloak"
     }
   ]
 }
