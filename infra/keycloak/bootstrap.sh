@@ -39,6 +39,40 @@ kcadm config credentials \
 # ---------------------------------------------------------------------------
 # Realm
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# In Keycloak 24+, the user-profile schema is enforced by default —
+# arbitrary attributes are silently dropped unless declared OR unmanaged
+# attributes are enabled. We do BOTH:
+#   • Add tenant_id explicitly (with admin-only edit permission so users
+#     can't change it from the account console).
+#   • Set unmanagedAttributePolicy=ENABLED so future attributes don't
+#     need a code change here.
+# ---------------------------------------------------------------------------
+ensure_user_profile() {
+  local existing
+  existing=$(kcadm get "realms/$REALM/users/profile" 2>/dev/null) || existing="{}"
+  local updated
+  updated=$(echo "$existing" | python3 -c "
+import json, sys
+p = json.load(sys.stdin)
+if 'attributes' not in p:
+    p['attributes'] = []
+names = [a.get('name') for a in p['attributes']]
+if 'tenant_id' not in names:
+    p['attributes'].append({
+        'name': 'tenant_id',
+        'displayName': 'Tenant ID',
+        'permissions': {'view': ['admin', 'user'], 'edit': ['admin']},
+        'multivalued': False
+    })
+p['unmanagedAttributePolicy'] = 'ENABLED'
+print(json.dumps(p))
+")
+  echo "$updated" | docker exec -i "$KC_CONTAINER" /opt/keycloak/bin/kcadm.sh \
+    update "realms/$REALM/users/profile" -f - >/dev/null
+  echo "    user profile updated (tenant_id declared, unmanaged attrs enabled)"
+}
+
 echo "==> Realm: $REALM"
 if kcadm get "realms/$REALM" >/dev/null 2>&1; then
   echo "    (exists; updating)"
@@ -79,6 +113,9 @@ ensure_role school-admin
 ensure_role teacher
 ensure_role parent
 ensure_role student
+
+echo "==> User profile schema"
+ensure_user_profile
 
 # ---------------------------------------------------------------------------
 # Clients
@@ -173,6 +210,69 @@ ensure_tenant_id_mapper() {
 
 ensure_tenant_id_mapper "$GATEWAY_ID"
 ensure_tenant_id_mapper "$SERVICES_ID"
+
+# Audience mapper: stamps `aud=gateway` on access tokens issued for the
+# gateway client. Keycloak's default access-token audience is "account";
+# our services validate against "gateway" (the API audience). Without
+# this mapper, every guard would reject every token.
+ensure_audience_mapper() {
+  local client_uuid=$1
+  local audience=$2
+  local existing
+  existing=$(kcadm get "clients/$client_uuid/protocol-mappers/models" -r "$REALM" \
+    | python3 -c "import json,sys; arr=json.load(sys.stdin); ids=[m['id'] for m in arr if m.get('name')=='audience-$2']; print(ids[0] if ids else '')")
+  if [ -n "$existing" ]; then
+    echo "    audience mapper for $audience exists; skipping"
+  else
+    echo "    creating audience-$audience mapper on client $client_uuid"
+    kcadm create "clients/$client_uuid/protocol-mappers/models" -r "$REALM" \
+      -s "name=audience-$audience" \
+      -s "protocol=openid-connect" \
+      -s "protocolMapper=oidc-audience-mapper" \
+      -s "config.\"included.client.audience\"=$audience" \
+      -s 'config."access.token.claim"=true' \
+      -s 'config."id.token.claim"=false'
+  fi
+}
+
+ensure_audience_mapper "$GATEWAY_ID" gateway
+ensure_audience_mapper "$SERVICES_ID" gateway
+
+# ---------------------------------------------------------------------------
+# Test user — used by mint-token.sh to fetch real JWTs in smoke tests.
+# Password grant requires this user to exist; the tenant_id attribute is
+# rewritten before each token request so tests can target arbitrary
+# tenants (one-tenant-at-a-time).
+# ---------------------------------------------------------------------------
+echo "==> Test user: dev-tester"
+EXISTING_USER=$(kcadm get users -r "$REALM" -q "username=dev-tester" --fields id 2>/dev/null \
+  | python3 -c "import json,sys; arr=json.load(sys.stdin); print(arr[0]['id'] if arr else '')")
+if [ -z "$EXISTING_USER" ]; then
+  echo "    creating dev-tester"
+  kcadm create users -r "$REALM" \
+    -s "username=dev-tester" \
+    -s "enabled=true" \
+    -s "email=dev-tester@local.test" \
+    -s "emailVerified=true"
+  EXISTING_USER=$(kcadm get users -r "$REALM" -q "username=dev-tester" --fields id \
+    | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
+  kcadm set-password -r "$REALM" --userid "$EXISTING_USER" \
+    --new-password "dev-pwd-for-tests" --temporary=false
+else
+  echo "    dev-tester exists ($EXISTING_USER); resetting password (non-temporary)"
+  kcadm set-password -r "$REALM" --userid "$EXISTING_USER" \
+    --new-password "dev-pwd-for-tests" --temporary=false
+fi
+# Some Keycloak versions still flag the user with UPDATE_PASSWORD even
+# when --temporary=false. Strip required actions so password grant works.
+kcadm update "users/$EXISTING_USER" -r "$REALM" -s 'requiredActions=[]'
+
+# Assign all five roles to the test user so RBAC tests can choose which
+# claim to assert against. Real users would have a subset; the dev
+# tester is intentionally over-privileged.
+for role in district-admin school-admin teacher parent student; do
+  kcadm add-roles -r "$REALM" --uusername dev-tester --rolename "$role" 2>/dev/null || true
+done
 
 echo
 echo "==> Done."
