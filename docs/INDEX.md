@@ -66,6 +66,7 @@ See [`adr/`](adr/) for the running log of decisions and their rationale.
 | [0005](adr/0005-rls-tenant-isolation.md) | PostgreSQL RLS with FORCE and SET LOCAL for tenant isolation | Accepted |
 | [0006](adr/0006-registry-failure-mode.md) | Tenant registry failure mode is fail-closed | Accepted |
 | [0007](adr/0007-control-plane-db-strategy.md) | Control-plane DB is a separate logical DB on the same Postgres cluster (Phase 1) | Accepted |
+| [0008](adr/0008-clean-architecture-layering.md) | Clean architecture layering for sis-service (and every domain service after) | Accepted |
 
 ---
 
