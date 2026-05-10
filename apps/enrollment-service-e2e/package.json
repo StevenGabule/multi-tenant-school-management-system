@@ -1,0 +1,27 @@
+{
+  "name": "@org/enrollment-service-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "enrollment-service-e2e",
+    "implicitDependencies": [
+      "enrollment-service"
+    ],
+    "targets": {
+      "e2e": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/test-output/jest/coverage"
+        ],
+        "options": {
+          "jestConfig": "apps/enrollment-service-e2e/jest.config.cts",
+          "passWithNoTests": true
+        },
+        "dependsOn": [
+          "enrollment-service:build",
+          "enrollment-service:serve"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+import { Logger } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { AppModule } from './app/app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  const globalPrefix = 'api';
+  app.setGlobalPrefix(globalPrefix, {
+    exclude: ['livez', 'readyz'],
+  });
+  app.useGlobalPipes(new ZodValidationPipe());
+  app.enableShutdownHooks();
+  const port = process.env.ENROLLMENT_SERVICE_PORT ?? process.env.PORT ?? 3004;
+  await app.listen(port);
+  Logger.log(
+    `enrollment-service listening on http://localhost:${port} (api prefix: /${globalPrefix})`,
+  );
+}
+
+bootstrap();

@@ -29,6 +29,12 @@
     },
     {
       "path": "./apps/academic-service"
+    },
+    {
+      "path": "./apps/enrollment-service-e2e"
+    },
+    {
+      "path": "./apps/enrollment-service"
     }
   ]
 }
