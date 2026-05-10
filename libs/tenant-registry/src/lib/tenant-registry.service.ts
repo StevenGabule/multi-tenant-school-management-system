@@ -97,6 +97,8 @@ export class TenantRegistryService implements OnModuleInit, OnModuleDestroy {
 
   private readonly baseUrl: string;
 
+  private statsLogTimer?: NodeJS.Timeout;
+
   async onModuleInit(): Promise<void> {
     await Promise.all([this.redis.connect(), this.subRedis.connect()]);
     await this.subRedis.subscribe(this.channel);
@@ -109,14 +111,38 @@ export class TenantRegistryService implements OnModuleInit, OnModuleDestroy {
       this.logger.debug(`invalidated ${msg} (pub/sub)`);
     });
     this.logger.log(`subscribed to ${this.channel}`);
+
+    // Cheap operational signal until milestone 1.8 wires Prometheus.
+    // Logs the stats roll-up every 60s; quietly skipped if no traffic.
+    this.statsLogTimer = setInterval(() => this.logStats(), 60_000);
+    if (typeof this.statsLogTimer.unref === 'function') {
+      this.statsLogTimer.unref();
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (this.statsLogTimer) clearInterval(this.statsLogTimer);
     await this.subRedis.unsubscribe(this.channel).catch(() => undefined);
     await Promise.all([
       this.redis.quit().catch(() => undefined),
       this.subRedis.quit().catch(() => undefined),
     ]);
+  }
+
+  private logStats(): void {
+    const total =
+      this.stat.hits.lru +
+      this.stat.hits.redis +
+      this.stat.hits.http +
+      this.stat.misses;
+    if (total === 0) return; // no traffic to summarise
+    const rate = (n: number) => `${((n / total) * 100).toFixed(1)}%`;
+    this.logger.log(
+      `registry stats: total=${total} ` +
+        `lru=${rate(this.stat.hits.lru)} redis=${rate(this.stat.hits.redis)} ` +
+        `http=${rate(this.stat.hits.http)} miss=${rate(this.stat.misses)} ` +
+        `invalidations=${this.stat.invalidations} unavailable=${this.stat.unavailable}`,
+    );
   }
 
   /**

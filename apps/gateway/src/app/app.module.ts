@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from '../auth/auth.module';
 import { HealthChecksModule } from '../health-checks/health-checks.module';
+import { InternalModule } from '../internal/internal.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { HealthModule } from '../health/health.module';
 
@@ -33,6 +34,7 @@ import { HealthModule } from '../health/health.module';
     PrismaModule,
     HealthModule,
     HealthChecksModule,
+    InternalModule,
   ],
   controllers: [AppController],
   providers: [AppService],
