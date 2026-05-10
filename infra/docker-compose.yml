@@ -56,6 +56,50 @@ services:
       - "4317:4317"     # OTLP gRPC receiver
       - "4318:4318"     # OTLP HTTP receiver
 
+  # Keycloak — IAM backbone for milestone 1.6 onward. OIDC provider that
+  # issues access + refresh tokens, manages realm roles/groups, and
+  # exposes JWKS at /realms/<realm>/protocol/openid-connect/certs.
+  #
+  # `start-dev` is the dev profile — HTTP listener (no TLS), no clustering,
+  # H2-by-default unless KC_DB is set. We point KC_DB at our shared
+  # Postgres for parity with how it'll run in staging/prod (where
+  # Keycloak's persistent state — realms, clients, users — must outlive
+  # container restarts).
+  #
+  # Bootstrap admin user (KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD) is the
+  # ONLY way to get the first kcadm.sh login. Production uses an external
+  # IdP federation or rotates this immediately.
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: sms-keycloak
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin_local_dev_pwd
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: sms_app
+      KC_DB_PASSWORD: local_dev_only_change_me_when_you_can
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      # JVM flags — Keycloak's default heap is fine for dev; the cap
+      # keeps it from squeezing WSL2 memory.
+      JAVA_OPTS_APPEND: "-Xms512m -Xmx1024m"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      # /health/ready reports 200 when realm import is complete + DB
+      # connection pool is warm. ~25-40s on a typical machine.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   adminer:
     image: adminer:4
     container_name: sms-adminer
