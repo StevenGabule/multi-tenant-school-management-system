@@ -5,7 +5,11 @@ import { EnrollmentSaga } from './enrollment.saga';
 import { SagaExecutor } from './saga.executor';
 
 @Module({
-  imports: [AuthModule], // for JwtModule (re-exported)
+  // KeycloakModule (loaded via AuthModule) is global so KeycloakService
+  // is available without explicit re-import. AuthModule itself is
+  // imported for backward compat — once JwtModule is removed in a
+  // follow-up cleanup it can drop too.
+  imports: [AuthModule],
   providers: [CrossServiceClient, EnrollmentSaga, SagaExecutor],
   exports: [CrossServiceClient, EnrollmentSaga, SagaExecutor],
 })

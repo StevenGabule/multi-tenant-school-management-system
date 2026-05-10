@@ -79,9 +79,25 @@ export class KeycloakAuthGuard implements CanActivate {
     if (!payload.sub) {
       throw new UnauthorizedException('JWT missing sub claim');
     }
-    const tenantId = typeof payload.tenant_id === 'string' ? payload.tenant_id : null;
+    let tenantId =
+      typeof payload.tenant_id === 'string' ? payload.tenant_id : null;
     if (tenantId !== null && !UUID_RE.test(tenantId)) {
       throw new UnauthorizedException('JWT tenant_id is not a valid UUID');
+    }
+
+    // Service tokens (client_credentials grant) carry no tenant_id —
+    // they're issued for the `services` client itself, not for a tenant
+    // user. The saga executor and other service callers declare the
+    // tenant per-request via X-Tenant-Id. We accept this ONLY when the
+    // token is a service token (azp != gateway client) — never for
+    // user tokens (which already carry their tenant in the JWT).
+    const isServiceToken =
+      typeof payload.azp === 'string' && !payload.realm_access?.roles?.length;
+    if (!tenantId && isServiceToken) {
+      const headerTenant = req.headers['x-tenant-id'];
+      if (typeof headerTenant === 'string' && UUID_RE.test(headerTenant)) {
+        tenantId = headerTenant;
+      }
     }
 
     const principal: AuthenticatedPrincipal = {
