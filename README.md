@@ -1,105 +1,127 @@
-# New Nx Repository
+# Multi-Tenant School Management System
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+A learning project for senior-level software engineering practice. The architecture is documented in [`documentation.md`](documentation.md); the build is staged across [Phase 1 milestones](docs/INDEX.md). Decisions live in [`docs/adr/`](docs/adr/).
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+> **Status:** Phase 1, Milestone 1.0 (Foundations & walking skeleton).
+> Single service (`gateway`), Postgres + Jaeger via Docker Compose, deployable to local kind. Real domain begins in milestone 1.3.
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
-## Try the full Nx platform
-🚀 If you haven't connected to Nx Cloud yet, [complete your setup here](https://cloud.nx.app/setup/connect-workspace/guide). Get faster builds with remote caching, distributed task execution, and self-healing CI. [See how your workspace can benefit](#nx-cloud).
-## Generate a library
+---
 
-```sh
-npx nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+## Quick start (target: clone-to-running in under 30 minutes)
+
+### Prerequisites
+
+- Node.js 20+ (we run 24)
+- pnpm 10+
+- Docker (Compose v2)
+- `kubectl` and `kind` if you want to exercise step 7
+
+### 1. Install
+
+```bash
+pnpm install
+cp .env.example .env.local      # then edit credentials if you want
 ```
 
-## Run tasks
+### 2. Bring up local infra
 
-To build the library use:
-
-```sh
-npx nx build pkg1
+```bash
+docker compose -f infra/docker-compose.yml up -d
+# postgres on host 5433, jaeger UI on http://localhost:16686, adminer on http://localhost:8081
 ```
 
-To run any task with Nx use:
+### 3. Apply the first migration
 
-```sh
-npx nx <target> <project-name>
+```bash
+pnpm prisma:gateway:migrate:init
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+### 4. Run the gateway
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Versioning and releasing
-
-To version and release the library use
-
-```
-npx nx release
-```
-
-Pass `--dry-run` to see what would happen without actually releasing the library.
-
-[Learn more about Nx release &raquo;](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Keep TypeScript project references up to date
-
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
-
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
-
-```sh
-npx nx sync
+```bash
+pnpm exec nx serve @org/gateway
+# in another terminal:
+curl http://localhost:3000/livez
+curl http://localhost:3000/readyz
+curl http://localhost:3000/api
+# open http://localhost:16686 — see traces under service "gateway"
 ```
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
+### 5. (Optional) Deploy to kind
 
-```sh
-npx nx sync:check
+See [`infra/k8s/gateway/README.md`](infra/k8s/gateway/README.md) for the full flow. Short version:
+
+```bash
+kind create cluster --name sms-dev
+docker network connect sms_default sms-dev-control-plane
+docker build -t sms-gateway:dev -f apps/gateway/Dockerfile .
+kind load docker-image sms-gateway:dev --name sms-dev
+
+# Create the secret from .env.local
+kubectl --context kind-sms-dev create secret generic gateway-secret \
+  --from-literal=DATABASE_URL="$(grep ^DATABASE_URL .env.local | cut -d= -f2-)" \
+  --dry-run=client -o yaml | kubectl --context kind-sms-dev apply -f -
+
+kubectl --context kind-sms-dev apply -f infra/k8s/gateway/
+kubectl --context kind-sms-dev port-forward svc/gateway 3010:3000
+# in another terminal:
+curl http://localhost:3010/readyz
 ```
 
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
+---
 
-## Nx Cloud
+## Layout
 
-Nx Cloud ensures a [fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
-
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-### Set up CI (non-Github Actions CI)
-
-**Note:** This is only required if your CI provider is not GitHub Actions.
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-npx nx g ci-workflow
+```
+.
+├── apps/
+│   └── gateway/                 ← NestJS service (Phase 1 walking skeleton)
+│       ├── prisma/              ← schema.prisma + migrations
+│       ├── src/                 ← main.ts loads OTel first, then NestFactory
+│       │   ├── app/             ← AppModule, AppController (placeholder)
+│       │   ├── health/          ← /livez, /readyz
+│       │   ├── prisma/          ← PrismaService extending PrismaClient
+│       │   └── instrumentation.ts  ← OTel SDK init
+│       ├── Dockerfile           ← multi-stage, ~298MB
+│       └── jest.config.cts
+├── libs/                        ← (empty until milestone 1.2)
+├── infra/
+│   ├── docker-compose.yml       ← postgres, jaeger, adminer
+│   └── k8s/gateway/             ← Deployment, Service, ConfigMap (Secret gitignored)
+├── docs/
+│   ├── INDEX.md                 ← Phase 1 roadmap
+│   ├── adr/                     ← Architecture Decision Records
+│   └── phase-1/                 ← per-milestone guides
+├── prisma.config.ts             ← Prisma 7 datasource URL lives here
+├── CONTEXT.md                   ← domain glossary
+└── documentation.md             ← original architecture document
 ```
 
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Common commands
 
-## Install Nx Console
+| Command | What it does |
+|---|---|
+| `pnpm exec nx serve @org/gateway` | Run the gateway locally with hot-reload |
+| `pnpm exec nx build @org/gateway` | Build the bundled `dist/main.js` |
+| `pnpm exec nx test @org/gateway` | Run unit tests |
+| `pnpm prisma:gateway:migrate` | Run a new migration (interactive name prompt) |
+| `pnpm prisma:gateway:generate` | Regenerate the Prisma client |
+| `pnpm prisma:gateway:studio` | Open Prisma Studio in the browser |
+| `docker compose -f infra/docker-compose.yml up -d` | Start postgres + jaeger + adminer |
+| `docker compose -f infra/docker-compose.yml down` | Stop them (add `-v` to wipe data) |
+| `docker build -t sms-gateway:dev -f apps/gateway/Dockerfile .` | Build the runtime image |
 
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+## What's intentionally simple in milestone 1.0
 
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- **Single service.** Real domain models start in milestone 1.3.
+- **Postgres on the host (compose), not in kind.** Avoids networking complexity early. Phase 2 moves data plane into the cluster.
+- **No tenant context yet.** RLS, GUCs, and the cross-tenant test arrive in milestone 1.1.
+- **No frontend.** Backend-only per the project's Phase 1 scope.
+- **No Nx Cloud, no service mesh, no Kafka.** Each gets a milestone or an ADR justification.
 
-## Useful links
+## Where to look next
 
-Learn more:
-
-- [Learn more about this workspace setup](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-And join the Nx community:
-
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- [`docs/INDEX.md`](docs/INDEX.md) — the Phase 1 roadmap (10 milestones).
+- [`docs/phase-1/00-foundations.md`](docs/phase-1/00-foundations.md) — what milestone 1.0 was supposed to teach.
+- [`docs/adr/`](docs/adr/) — every load-bearing decision and why.
+- [`CONTEXT.md`](CONTEXT.md) — domain glossary; grow it as you learn.
