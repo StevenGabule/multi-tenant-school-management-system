@@ -1,5 +1,11 @@
 import { Module } from '@nestjs/common';
-// Stub module for now — controllers + services land in step 3.
+import { DownstreamModule } from '../downstream/downstream.module';
+import { ChildrenAggregator } from './children.aggregator';
+import { DashboardController } from './dashboard.controller';
 
-@Module({})
+@Module({
+  imports: [DownstreamModule],
+  controllers: [DashboardController],
+  providers: [ChildrenAggregator],
+})
 export class DashboardModule {}
