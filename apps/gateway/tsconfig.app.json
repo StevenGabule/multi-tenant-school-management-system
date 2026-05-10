@@ -3,7 +3,10 @@
   "compilerOptions": {
     "outDir": "dist",
     "types": ["node"],
-    "rootDir": "src",
+    // rootDir intentionally NOT set: webpack pulls in workspace library
+    // source (e.g. @org/tenant-registry from libs/tenant-registry/src/),
+    // and `rootDir: "src"` would reject anything outside apps/gateway/src.
+    // Compilation scope is still constrained by `include` below.
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
@@ -15,5 +18,10 @@
     "jest.config.cts",
     "src/**/*.spec.ts",
     "src/**/*.test.ts"
+  ],
+  "references": [
+    {
+      "path": "../../libs/tenant-registry/tsconfig.lib.json"
+    }
   ]
 }

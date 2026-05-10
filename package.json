@@ -52,6 +52,7 @@
     "nx": "22.7.0",
     "prettier": "^3.8.1",
     "prisma": "^7.8.0",
+    "swc-loader": "^0.2.7",
     "testcontainers": "^11.14.0",
     "ts-jest": "^29.4.0",
     "ts-node": "10.9.1",

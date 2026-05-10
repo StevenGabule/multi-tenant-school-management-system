@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TenantRegistryModule } from '@org/tenant-registry';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from '../auth/auth.module';
@@ -12,13 +13,21 @@ import { HealthModule } from '../health/health.module';
 
 @Module({
   imports: [
-    // Load .env.local first (developer-edited), then .env (committed defaults).
-    // ConfigModule populates process.env synchronously during module loading,
-    // so PrismaService can read DATABASE_URL in its constructor.
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
       cache: true,
+    }),
+    // Tenant registry client (3-layer cache → tenant-service HTTP).
+    // Imported BEFORE AuthModule so JwtAuthGuard can inject it.
+    TenantRegistryModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        baseUrl: config.getOrThrow<string>('TENANT_SERVICE_BASE_URL'),
+        redisUrl: config.getOrThrow<string>('REDIS_URL'),
+        invalidationChannel: config.get<string>('REDIS_INVALIDATION_CHANNEL'),
+      }),
     }),
     AuthModule,
     PrismaModule,
