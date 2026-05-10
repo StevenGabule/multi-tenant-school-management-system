@@ -63,6 +63,7 @@ See [`adr/`](adr/) for the running log of decisions and their rationale.
 | [0002](adr/0002-monorepo-tooling.md) | Use Nx as the monorepo build tool | Accepted |
 | [0003](adr/0003-ci-platform.md) | GitHub Actions for CI | Accepted |
 | [0004](adr/0004-prisma-7-setup.md) | Prisma 7 setup with prisma.config.ts and driver adapter | Accepted |
+| [0005](adr/0005-rls-tenant-isolation.md) | PostgreSQL RLS with FORCE and SET LOCAL for tenant isolation | Accepted |
 
 ---
 

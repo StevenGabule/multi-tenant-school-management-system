@@ -95,6 +95,7 @@ The "never edit accepted" rule is the most violated and the most important. The 
 | [0002](0002-monorepo-tooling.md) | Use Nx as the monorepo build tool | Accepted |
 | [0003](0003-ci-platform.md) | GitHub Actions for CI | Accepted |
 | [0004](0004-prisma-7-setup.md) | Prisma 7 setup with prisma.config.ts and driver adapter | Accepted |
+| [0005](0005-rls-tenant-isolation.md) | PostgreSQL RLS with FORCE and SET LOCAL for tenant isolation | Accepted |
 
 ---
 
