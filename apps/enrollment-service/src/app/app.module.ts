@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TenantRegistryModule } from '@org/tenant-registry';
 import { AuthModule } from '../auth/auth.module';
+import { EnrollmentsModule } from '../enrollments/enrollments.module';
 import { HealthModule } from '../health/health.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SagasModule } from '../sagas/sagas.module';
@@ -26,6 +27,7 @@ import { SagasModule } from '../sagas/sagas.module';
     PrismaModule,
     HealthModule,
     SagasModule,
+    EnrollmentsModule,
   ],
 })
 export class AppModule {}
