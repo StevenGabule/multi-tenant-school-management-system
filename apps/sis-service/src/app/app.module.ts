@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TenantRegistryModule } from '@org/tenant-registry';
 import { AuthModule } from '../auth/auth.module';
 import { HealthModule } from '../health/health.module';
+import { OutboxModule } from '../outbox/outbox.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StudentsModule } from '../modules/students/students.module';
 
@@ -24,6 +25,7 @@ import { StudentsModule } from '../modules/students/students.module';
     }),
     AuthModule,
     PrismaModule,
+    OutboxModule,
     HealthModule,
     StudentsModule,
   ],
