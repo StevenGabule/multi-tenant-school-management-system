@@ -15,7 +15,11 @@
     "prisma:sis-service:migrate:init": "dotenv -e .env.local -- prisma migrate dev --config prisma.sis-service.config.ts --name init",
     "prisma:sis-service:migrate": "dotenv -e .env.local -- prisma migrate dev --config prisma.sis-service.config.ts",
     "prisma:sis-service:generate": "dotenv -e .env.local -- prisma generate --config prisma.sis-service.config.ts",
-    "prisma:sis-service:studio": "dotenv -e .env.local -- prisma studio --config prisma.sis-service.config.ts"
+    "prisma:sis-service:studio": "dotenv -e .env.local -- prisma studio --config prisma.sis-service.config.ts",
+    "prisma:academic-service:migrate:init": "dotenv -e .env.local -- prisma migrate dev --config prisma.academic-service.config.ts --name init",
+    "prisma:academic-service:migrate": "dotenv -e .env.local -- prisma migrate dev --config prisma.academic-service.config.ts",
+    "prisma:academic-service:generate": "dotenv -e .env.local -- prisma generate --config prisma.academic-service.config.ts",
+    "prisma:academic-service:studio": "dotenv -e .env.local -- prisma studio --config prisma.academic-service.config.ts"
   },
   "private": true,
   "pnpm": {

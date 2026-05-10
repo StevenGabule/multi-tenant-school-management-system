@@ -1,0 +1,46 @@
+// Schema for academic-service.
+//
+// EnrollmentSlot is the canonical example for milestone 1.4: when a
+// student.created event arrives from sis-service, the consumer creates
+// an EnrollmentSlot for that student. Real Course/Section + grading
+// schemes etc. arrive in milestone 1.4+ as the domain grows.
+//
+// processed_event is the consumer-side idempotency table — keys an
+// (eventId, consumerName) pair so the same event delivered twice runs
+// the handler exactly once.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model EnrollmentSlot {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  studentId String   @db.Uuid // logical reference to sis-service.student.id
+  status    String   @default("pending") // pending|enrolled|withdrawn
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, status])
+  @@map("enrollment_slot")
+}
+
+// Idempotency record for the StudentEventsConsumer (and any future
+// consumers in this service). NOT tenant-scoped — this is infrastructure
+// bookkeeping, not application data. The relay can re-deliver the same
+// event many times; the consumer inserts here under ON CONFLICT DO
+// NOTHING and only runs the handler if the insert actually happened.
+model ProcessedEvent {
+  eventId      String   @db.Uuid
+  consumerName String
+  processedAt  DateTime @default(now())
+
+  @@id([eventId, consumerName])
+  @@map("processed_event")
+}
