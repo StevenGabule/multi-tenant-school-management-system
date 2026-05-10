@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { OutboxService } from '../../../outbox/outbox.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Student } from '../domain/entities/student.entity';
 import {
@@ -26,6 +27,7 @@ export class CreateStudentUseCase {
   constructor(
     @Inject(STUDENT_REPOSITORY) private readonly repo: StudentRepository,
     private readonly prisma: PrismaService,
+    private readonly outbox: OutboxService,
   ) {}
 
   async execute(input: CreateStudentInput): Promise<Student> {
@@ -44,7 +46,29 @@ export class CreateStudentUseCase {
       gender: input.gender ?? null,
     });
 
-    await this.repo.save(student);
+    // Save + outbox MUST be atomic. If the outbox append fails, the
+    // student insert rolls back too — no orphaned student rows that
+    // never produced an event, no events for students that never
+    // committed. This is the entire point of the outbox pattern.
+    await this.prisma.withCurrentTenant(async (tx) => {
+      await this.repo.save(student, tx);
+      await this.outbox.append(tx, {
+        tenantId,
+        aggregateType: 'Student',
+        aggregateId: student.id.value,
+        eventType: 'student.created',
+        payload: {
+          studentId: student.id.value,
+          firstName: student.name.firstName,
+          middleName: student.name.middleName,
+          lastName: student.name.lastName,
+          dateOfBirth: student.dateOfBirth.toISODate(),
+          email: student.email?.value ?? null,
+          externalId: student.externalId,
+        },
+      });
+    });
+
     return student;
   }
 }

@@ -29,6 +29,14 @@ export interface StudentRepository {
   findById(id: StudentId): Promise<Student | null>;
   findByExternalId(externalId: string): Promise<Student | null>;
   list(filter?: StudentListFilter): Promise<Student[]>;
-  /** Insert if new, update if existing (UPSERT semantics by id). */
-  save(student: Student): Promise<void>;
+  /**
+   * Insert if new, update if existing (UPSERT semantics by id).
+   *
+   * If `tx` is omitted, the impl opens its own tenant-scoped transaction.
+   * If passed, the impl participates in the caller's tx — required when
+   * multiple writes (e.g., student + outbox event) must commit atomically.
+   * The tx parameter is `unknown` to keep Prisma out of the domain;
+   * implementations cast to their concrete type.
+   */
+  save(student: Student, tx?: unknown): Promise<void>;
 }

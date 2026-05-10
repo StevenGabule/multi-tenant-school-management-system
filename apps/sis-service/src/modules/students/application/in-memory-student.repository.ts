@@ -49,7 +49,9 @@ export class InMemoryStudentRepository implements StudentRepository {
     return out.slice(0, Math.min(filter.limit ?? 50, 200));
   }
 
-  async save(student: Student): Promise<void> {
+  async save(student: Student, _tx?: unknown): Promise<void> {
+    // The in-memory impl has no notion of transactions; tx parameter
+    // is accepted for interface compatibility and ignored.
     this.byId.set(student.id.value, student);
   }
 

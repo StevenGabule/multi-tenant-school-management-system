@@ -1,4 +1,5 @@
 import { ClsService } from 'nestjs-cls';
+import { OutboxService } from '../../../outbox/outbox.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { StudentNotFound } from '../domain/errors';
 import { InvariantViolation } from '../domain/errors';
@@ -18,20 +19,39 @@ const TENANT_ID = '11111111-1111-4111-8111-111111111111';
 
 function buildHarness() {
   const repo = new InMemoryStudentRepository();
-  // Minimal PrismaService stub — the real one isn't needed because
-  // InMemoryStudentRepository doesn't touch Prisma.
+  // Minimal PrismaService stub — InMemoryStudentRepository doesn't touch
+  // Prisma, but CreateStudentUseCase reads currentTenantId() and calls
+  // withCurrentTenant() to wrap the save + outbox in one tx.
   const prisma = {
     currentTenantId: () => TENANT_ID,
+    withCurrentTenant: async <T>(
+      fn: (tx: unknown) => Promise<T>,
+    ): Promise<T> => fn('FAKE_TX'),
   } as unknown as PrismaService;
-  // CLS stub — the use cases that don't read CLS won't touch it; the
-  // ones that do will see a deterministic value.
+  // OutboxService stub — record what gets appended so the create test
+  // can assert the event payload.
+  const outbox = {
+    appended: [] as unknown[],
+    append: jest.fn(async function (
+      this: { appended: unknown[] },
+      _tx,
+      params,
+    ) {
+      this.appended.push(params);
+    }),
+  };
   const cls = {
     get: () => TENANT_ID,
   } as unknown as ClsService;
   void cls;
   return {
     repo,
-    create: new CreateStudentUseCase(repo, prisma),
+    outbox,
+    create: new CreateStudentUseCase(
+      repo,
+      prisma,
+      outbox as unknown as OutboxService,
+    ),
     findById: new FindStudentByIdUseCase(repo),
     list: new ListStudentsUseCase(repo),
     update: new UpdateStudentUseCase(repo),
@@ -63,6 +83,23 @@ describe('CreateStudentUseCase', () => {
         dateOfBirth: '2010-12-10',
       }),
     ).rejects.toBeInstanceOf(InvariantViolation);
+  });
+
+  it('appends a student.created outbox event in the same tx', async () => {
+    const h = buildHarness();
+    const s = await h.create.execute({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      dateOfBirth: '2010-12-10',
+    });
+    expect(h.outbox.append).toHaveBeenCalledTimes(1);
+    expect(h.outbox.appended).toHaveLength(1);
+    const event = h.outbox.appended[0] as Record<string, unknown>;
+    expect(event.eventType).toBe('student.created');
+    expect(event.aggregateType).toBe('Student');
+    expect(event.aggregateId).toBe(s.id.value);
+    expect(event.tenantId).toBe(TENANT_ID);
+    expect((event.payload as Record<string, string>).studentId).toBe(s.id.value);
   });
 });
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService, TenantTx } from '../../../prisma/prisma.service';
 import { Student } from '../domain/entities/student.entity';
 import {
   StudentListFilter,
@@ -66,18 +66,26 @@ export class PrismaStudentRepository implements StudentRepository {
     });
   }
 
-  async save(student: Student): Promise<void> {
+  async save(student: Student, tx?: unknown): Promise<void> {
     const data = StudentMapper.toPersistence(student);
-    await this.prisma.withCurrentTenant(async (tx) => {
-      // Upsert by id. WITH CHECK on the tenant_isolation policy will
-      // reject the write if data.tenantId doesn't match the CLS tenant
-      // (e.g., bug in the application layer trying to save another
-      // tenant's student). Defense in depth.
-      await tx.student.upsert({
+    const upsert = async (t: TenantTx) => {
+      // Upsert by id. WITH CHECK on the tenant_isolation policy rejects
+      // the write if data.tenantId doesn't match the CLS tenant
+      // (defense in depth against application-layer bugs).
+      await t.student.upsert({
         where: { id: data.id },
         create: data,
         update: data,
       });
-    });
+    };
+
+    if (tx) {
+      // Caller controls the tx (e.g., CreateStudentUseCase wants to
+      // append an outbox event in the same tx). Use it as-is.
+      await upsert(tx as TenantTx);
+    } else {
+      // Stand-alone save — open a tenant-scoped tx of our own.
+      await this.prisma.withCurrentTenant(upsert);
+    }
   }
 }
