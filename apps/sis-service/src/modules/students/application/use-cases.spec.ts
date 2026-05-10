@@ -3,6 +3,7 @@ import { OutboxService } from '../../../outbox/outbox.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { StudentNotFound } from '../domain/errors';
 import { InvariantViolation } from '../domain/errors';
+import { AuthzService } from './authz.service';
 import { CreateStudentUseCase } from './create-student.use-case';
 import {
   FindStudentByIdUseCase,
@@ -52,7 +53,12 @@ function buildHarness() {
       prisma,
       outbox as unknown as OutboxService,
     ),
-    findById: new FindStudentByIdUseCase(repo),
+    findById: new FindStudentByIdUseCase(repo, {
+      // ABAC stub: tests in this file don't model role/parent semantics —
+      // they're use-case logic tests. The dedicated authz.service.spec.ts
+      // covers the parent-of-student-X branches against a real principal.
+      assertCanAccessStudent: async () => undefined,
+    } as unknown as AuthzService),
     list: new ListStudentsUseCase(repo),
     update: new UpdateStudentUseCase(repo),
     softDelete: new SoftDeleteStudentUseCase(repo),

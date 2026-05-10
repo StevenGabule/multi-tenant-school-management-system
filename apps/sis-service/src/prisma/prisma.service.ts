@@ -54,12 +54,24 @@ export class PrismaService
         `withTenant requires a valid UUID tenantId; got "${tenantId}"`,
       );
     }
+    // userId from CLS — populated by KeycloakAuthGuard. When present,
+    // the parent_abac_rls migration's policy uses it via
+    // app.current_user_id GUC for the parent-of-X visibility check.
+    // When absent (admin paths, internal jobs), the policy short-
+    // circuits to "no user-scope filter" — see migration comments.
+    const userId = this.cls.get<string>('userId');
     return this.cls.run(async () => {
       this.cls.set('tenantId', tenantId);
+      if (userId) this.cls.set('userId', userId);
       return this.$transaction(async (tx) => {
         await tx.$executeRawUnsafe(
           `SET LOCAL app.current_tenant_id = '${tenantId}'`,
         );
+        if (userId && UUID_RE.test(userId)) {
+          await tx.$executeRawUnsafe(
+            `SET LOCAL app.current_user_id = '${userId}'`,
+          );
+        }
         return fn(tx);
       });
     });

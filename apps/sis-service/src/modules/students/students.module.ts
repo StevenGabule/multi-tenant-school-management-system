@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor';
+import { AuthzService } from './application/authz.service';
 import { CreateStudentUseCase } from './application/create-student.use-case';
 import {
   FindStudentByIdUseCase,
@@ -19,6 +20,7 @@ import { PrismaStudentRepository } from './infrastructure/prisma-student.reposit
   imports: [AuthModule],
   controllers: [StudentsController],
   providers: [
+    AuthzService,
     CreateStudentUseCase,
     FindStudentByIdUseCase,
     ListStudentsUseCase,
