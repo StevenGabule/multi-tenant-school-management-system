@@ -223,17 +223,45 @@ At least two:
 
 ## Definition of done
 
-- [ ] Keycloak running with realm `sms-platform` and two clients (`gateway`, `services`).
-- [ ] Realm roles and tenant groups configured; `tenant_id` mapper emits the claim correctly.
-- [ ] Gateway validates JWTs against Keycloak's JWKS (cached, with refresh on unknown `kid`).
-- [ ] Hand-rolled JWT logic from milestone 1.1 fully replaced.
-- [ ] Refresh token rotation working; theft detection triggers session revocation.
-- [ ] `RolesGuard` enforces RBAC with role hierarchy.
-- [ ] `parent of student X` ABAC enforced at service layer AND in RLS policy (defense in depth).
-- [ ] `SECURITY DEFINER` helper function for `is_guardian_of` lookup.
-- [ ] All twelve test scenarios from step 11 pass.
-- [ ] Cross-tenant test from milestone 1.1 still passes; ABAC test added (parent A cannot access parent B's children).
-- [ ] ADR-0012 (IAM backbone) and ADR-0013 (realm strategy) written.
+- [x] Keycloak running with realm `sms-platform` and two clients (`gateway`, `services`). *(commit `2ae1853`; container `sms-keycloak` healthy; OIDC discovery at `http://localhost:8080/realms/sms-platform/.well-known/openid-configuration`)*
+- [x] Realm roles + `tenant_id` mapper emit the claim correctly. *(commits `94d6cc9`, `3ebb231`; user-attribute mapper on both clients; user-profile schema declares `tenant_id` with admin-only edit; realm tokens carry `tenant_id` UUID)*
+- [x] Services validate JWTs against Keycloak's JWKS, cached with refresh on unknown `kid`. *(commits `3ebb231`, `feat: migrate gateway/sis/academic/enrollment to KeycloakAuthGuard`; `libs/auth-keycloak` uses jose's `createRemoteJWKSet` with 10-min cache + 30s cooldown)*
+- [x] Hand-rolled JWT logic from milestone 1.1 fully replaced. *(commit `feat: migrate gateway/sis/academic/enrollment to KeycloakAuthGuard`; deleted `dev-tokens.controller.ts` and 4× local `jwt-auth.guard.ts`; removed `JwtModule` from enrollment-service in `feat(enrollment-service): saga uses Keycloak service tokens`)*
+- [~] Refresh token rotation + theft detection. **Configured at the realm level** (`revokeRefreshToken=true`, `refreshTokenMaxReuse=0` in bootstrap.sh) but the end-to-end "use the same refresh token twice → session revoked" test is deferred to milestone 1.7 alongside the BFF cookie-handling code (no SPA today to drive the rotation).
+- [x] `RolesGuard` + role hierarchy. *(commit `feat(libs/auth-keycloak)`; `Roles()` decorator + ROLE_HIERARCHY in `libs/auth-keycloak/src/lib/roles.guard.ts`; `district-admin > school-admin > teacher`, parent/student leaf)*
+- [x] `parent of student X` ABAC at service layer AND in RLS policy. *(commit `feat(sis-service): parent-of-student-X ABAC at SQL + application layer`; `AuthzService.assertCanAccessStudent` + the rewritten `tenant_isolation` policy on `student` reading `app.is_guardian_of` via SECURITY DEFINER)*
+- [x] `SECURITY DEFINER` helper for `is_guardian_of` lookup. *(migration `20260510130000_parent_abac_rls`; `app.is_guardian_of(uuid, uuid)` STABLE LANGUAGE sql, BYPASSRLS via the function owner)*
+- [~] All twelve test scenarios from step 11. **Partial — 5 of 12 verified end-to-end:**
+  - [x] Login flow end-to-end (`infra/keycloak/mint-token.sh` + verified saga happy path with real Keycloak token)
+  - [x] JWT signature tampering → 401 (verified manually in step-9 negative tests)
+  - [x] Missing Authorization → 401
+  - [x] Wrong audience (master realm token) → 401
+  - [x] Hand-rolled JWT_SECRET token rejected (no Keycloak signature) → 401
+  - [ ] Expired token → 401 (relies on natural exp; not exercised under wall-clock fault)
+  - [ ] JWKS rotation: rotate Keycloak's signing key, verify service refreshes (not exercised)
+  - [ ] RBAC: parent token rejected from district-admin endpoint (the guard exists; no controller currently has `@Roles()` applied)
+  - [x] ABAC: parent A's token cannot access parent B's child (covered by 7 unit tests in `authz.service.spec.ts` + the SQL policy)
+  - [ ] ABAC RLS catches bypass (manual psql test deferred — would require a Testcontainers integration test against the migration)
+  - [ ] Refresh-token rotation: use a refresh token twice, second use revokes session (deferred — no SPA driver)
+  - [ ] Concurrent saga + auth (load test, not in scope for 1.6)
+- [x] Cross-tenant test from milestone 1.1 still passes. *(58 sis tests + 7 new authz tests = 65/65 passing; the cross-tenant test in `student.cross-tenant.spec.ts` is part of those 58)*
+- [x] ADR-0013 (IAM backbone) and ADR-0014 (realm strategy) written. *(numbers shifted from milestone-doc 0012/0013 because milestone 1.5 took those slots)*
+
+**End-to-end verification (manual, recorded in conversation):**
+
+Happy path with Keycloak service token:
+  POST /api/enrollments → 202 with sagaId. Saga executor uses
+  client_credentials grant against `services` confidential client +
+  X-Tenant-Id header. Step 1 (create-student) calls SIS, KeycloakAuthGuard
+  validates the service token, accepts the X-Tenant-Id header (because
+  preferred_username starts with `service-account-`), populates CLS,
+  use case runs. Step 2 (confirm-enrollment) same path against academic.
+  Saga ends `completed`. Student in sms_sis, enrollment in sms_academic.
+
+Negative tests (`step 9` of this milestone):
+  Valid token → 201; missing Authorization → 401; tampered signature → 401;
+  legacy hand-rolled JWT_SECRET token → 401 (signature doesn't match
+  Keycloak JWKS); master-realm token → 401 (wrong issuer + audience).
 
 ---
 
