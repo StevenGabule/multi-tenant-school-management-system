@@ -19,7 +19,9 @@ export interface PrismaStudentRow {
   firstName: string;
   middleName: string | null;
   lastName: string;
-  dateOfBirth: Date;
+  // Either Date (Prisma's typical hydration) OR string (pg's DATE-as-text
+  // parser, which we set in tests and recommend for production).
+  dateOfBirth: Date | string;
   email: string | null;
   phone: string | null;
   gender: string | null;
@@ -32,6 +34,13 @@ export interface PrismaStudentRow {
 
 export const StudentMapper = {
   toDomain(row: PrismaStudentRow): Student {
+    // Robust DATE handling: if pg's type parser returns string already
+    // (recommended), use it. If a Date sneaks through, slice the UTC
+    // ISO — but be aware that this can roll a day in non-UTC timezones.
+    const dob =
+      typeof row.dateOfBirth === 'string'
+        ? row.dateOfBirth
+        : row.dateOfBirth.toISOString().slice(0, 10);
     const snap: StudentSnapshot = {
       id: row.id,
       tenantId: row.tenantId,
@@ -39,7 +48,7 @@ export const StudentMapper = {
       firstName: row.firstName,
       middleName: row.middleName,
       lastName: row.lastName,
-      dateOfBirth: row.dateOfBirth.toISOString().slice(0, 10),
+      dateOfBirth: dob,
       email: row.email,
       phone: row.phone,
       gender: row.gender,
