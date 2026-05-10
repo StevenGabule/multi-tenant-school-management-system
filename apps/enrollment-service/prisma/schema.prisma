@@ -1,0 +1,87 @@
+// Schema for enrollment-service (milestone 1.5 — Enrollment Saga).
+//
+// SagaInstance is the durable state machine. One row per enrollment
+// attempt. Status lifecycle:
+//
+//     running
+//        │
+//        ├──► completed   (all steps succeeded)
+//        │
+//        └──► compensating ──► compensated   (a step failed; reversal worked)
+//                                  │
+//                                  └──► failed (compensation itself failed —
+//                                              needs manual intervention)
+//
+// SagaStep is one row per step in the saga, in declaration order. Each
+// step's `output` JSON is the captured result of `execute(...)` and is
+// what the corresponding `compensate(...)` reads. Capturing it on the
+// happy path is critical: if step 3 fails, step 2's compensate needs to
+// know what step 2 produced (e.g., the studentId, the slotId).
+//
+// Both tables are tenant-scoped under RLS. The saga executor (worker
+// process) connects via sms_app with BYPASSRLS so it can scan ALL
+// tenants' running sagas — same pattern as the outbox relay.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model SagaInstance {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  type        String // "enrollment", future: "tenant-promotion", etc.
+  status      String // running|completed|compensating|compensated|failed
+  currentStep Int       @default(0)
+  totalSteps  Int
+  // Input + accumulated step outputs. Step N reads
+  //   ctx.input.X         (original input)
+  //   ctx.steps[name].out (prior step output)
+  // Both live in this JSON so the executor doesn't have to JOIN.
+  payload     Json
+  // Latest error (per step retry). Cleared when the step eventually
+  // succeeds; persists when the saga transitions to compensating/failed.
+  lastError   Json?
+  // How many times the *current* step has been attempted. Reset to 0
+  // when advancing to the next step. Compared against the per-step
+  // retry budget defined in code (currently 3).
+  retryCount  Int       @default(0)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  steps SagaStep[]
+
+  // Executor's primary scan: pick up running sagas, oldest first
+  // (FIFO across tenants). FOR UPDATE SKIP LOCKED claims a disjoint
+  // set across multiple replicas.
+  @@index([status, startedAt])
+  @@index([tenantId, status])
+  @@map("saga_instance")
+}
+
+model SagaStep {
+  id            String    @id @default(uuid()) @db.Uuid
+  sagaId        String    @db.Uuid
+  stepIndex     Int
+  name          String // e.g. "create-student"
+  status        String // pending|running|completed|compensated|failed
+  attempts      Int       @default(0)
+  // Output captured AT THE MOMENT OF SUCCESS. The compensate function
+  // gets this back. If a step never completed, output is null and the
+  // compensation must handle the partial-state case (see ADR-0011).
+  output        Json?
+  error         Json?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  compensatedAt DateTime?
+
+  saga SagaInstance @relation(fields: [sagaId], references: [id], onDelete: Cascade)
+
+  @@unique([sagaId, stepIndex])
+  @@index([sagaId, status])
+  @@map("saga_step")
+}
