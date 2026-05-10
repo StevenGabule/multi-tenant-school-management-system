@@ -13,6 +13,8 @@ export default defineConfig({
     path: 'apps/gateway/prisma/migrations',
   },
   datasource: {
-    url: env('DATABASE_URL'),
+    // Migrations run as the privileged role (DDL needs CREATEROLE, ALTER, etc.).
+    // Runtime PrismaClient uses DATABASE_URL (app_user) — see PrismaService.
+    url: env('DATABASE_MIGRATION_URL'),
   },
 });
