@@ -48,6 +48,43 @@ services:
     ports:
       - "8081:8080"
 
+  # Transaction-mode connection pooler in front of Postgres. Runtime app
+  # connects to pgbouncer:6432 (with ?pgbouncer=true to disable Prisma's
+  # prepared-statement cache). Migrations bypass — they need direct
+  # session/DDL semantics that transaction-mode pooling breaks.
+  #
+  # AUTH_TYPE=md5 keeps the userlist readable and lets the entrypoint
+  # auto-generate it from DB_USER/DB_PASSWORD (vs scram-sha-256 which
+  # would need pre-hashed entries). This is local-dev only; production
+  # injects pre-computed hashes via secrets.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: sms-pgbouncer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LISTEN_PORT: "6432"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sms_dev
+      DB_USER: app_user
+      DB_PASSWORD: app_user_local_dev_pwd
+      POOL_MODE: transaction
+      # SCRAM-SHA-256 matches Postgres 16's default password storage.
+      # PgBouncer 1.25 supports it bidirectionally — clients send SCRAM,
+      # PgBouncer authenticates to Postgres with SCRAM too.
+      AUTH_TYPE: scram-sha-256
+      ADMIN_USERS: app_user
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "20"
+      # Prisma sends extra_float_digits + application_name on connect.
+      # PgBouncer rejects unknown startup params unless we list them here.
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path,application_name
+    ports:
+      - "6432:6432"
+
 volumes:
   postgres_data:
     name: sms_postgres_data
