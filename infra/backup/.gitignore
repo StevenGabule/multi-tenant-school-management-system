@@ -1,0 +1,5 @@
+# The dev KEK simulates a KMS-managed key. NEVER commit it.
+# Production: this would be an alias reference to a real KMS key with
+# IAM-controlled access. Local dev: a random 32-byte file is fine, but
+# we still keep it out of git so a fork doesn't share keys.
+dev-kek.bin
