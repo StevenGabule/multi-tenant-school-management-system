@@ -23,6 +23,12 @@
     },
     {
       "path": "./apps/sis-service"
+    },
+    {
+      "path": "./apps/academic-service-e2e"
+    },
+    {
+      "path": "./apps/academic-service"
     }
   ]
 }
