@@ -4,6 +4,7 @@ import { TenantRegistryModule } from '@org/tenant-registry';
 import { AuthModule } from '../auth/auth.module';
 import { HealthModule } from '../health/health.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { StudentsModule } from '../modules/students/students.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     AuthModule,
     PrismaModule,
     HealthModule,
+    StudentsModule,
   ],
 })
 export class AppModule {}
