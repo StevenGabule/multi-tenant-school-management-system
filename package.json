@@ -11,7 +11,11 @@
     "prisma:tenant-service:migrate:init": "dotenv -e .env.local -- prisma migrate dev --config prisma.tenant-service.config.ts --name init",
     "prisma:tenant-service:migrate": "dotenv -e .env.local -- prisma migrate dev --config prisma.tenant-service.config.ts",
     "prisma:tenant-service:generate": "dotenv -e .env.local -- prisma generate --config prisma.tenant-service.config.ts",
-    "prisma:tenant-service:studio": "dotenv -e .env.local -- prisma studio --config prisma.tenant-service.config.ts"
+    "prisma:tenant-service:studio": "dotenv -e .env.local -- prisma studio --config prisma.tenant-service.config.ts",
+    "prisma:sis-service:migrate:init": "dotenv -e .env.local -- prisma migrate dev --config prisma.sis-service.config.ts --name init",
+    "prisma:sis-service:migrate": "dotenv -e .env.local -- prisma migrate dev --config prisma.sis-service.config.ts",
+    "prisma:sis-service:generate": "dotenv -e .env.local -- prisma generate --config prisma.sis-service.config.ts",
+    "prisma:sis-service:studio": "dotenv -e .env.local -- prisma studio --config prisma.sis-service.config.ts"
   },
   "private": true,
   "pnpm": {

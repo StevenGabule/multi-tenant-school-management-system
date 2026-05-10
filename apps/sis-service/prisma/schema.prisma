@@ -1,0 +1,83 @@
+// Schema for sis-service (Student Information System).
+//
+// All tables are tenant-scoped (under RLS). The tenantId column references
+// tenant.id in the control plane (sms_control DB) — there is NO foreign key
+// constraint because cross-database FKs aren't supported in Postgres. The
+// @org/tenant-registry client validates tenant ids before any operation
+// reaches this DB.
+//
+// Per the milestone 1.1 lesson (RESTRICTIVE FOR SELECT blocks UPDATE-based
+// soft-delete), we DO NOT add an active_only RESTRICTIVE policy here. The
+// repository filters `WHERE deletedAt IS NULL` in app code instead. ADR-0008
+// documents this choice.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Student {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  externalId  String? // school-issued id; unique per tenant
+  firstName   String
+  middleName  String?
+  lastName    String
+  dateOfBirth DateTime  @db.Date
+  email       String?
+  phone       String?
+  gender      String?
+  enrolledAt  DateTime?
+  withdrawnAt DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  guardianLinks GuardianLink[]
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId, lastName, firstName])
+  @@index([tenantId, deletedAt])
+  @@map("student")
+}
+
+model Guardian {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @db.Uuid
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  relationship String // "parent" | "legal_guardian" | "emergency"
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  studentLinks GuardianLink[]
+
+  @@index([tenantId])
+  @@map("guardian")
+}
+
+// Link table — also tenant-scoped. We denormalize tenantId here so RLS
+// can apply directly to it; without a tenantId column the link table
+// would only be reachable through the joined tables, which complicates
+// the policy.
+model GuardianLink {
+  studentId  String  @db.Uuid
+  guardianId String  @db.Uuid
+  tenantId   String  @db.Uuid
+  isPrimary  Boolean @default(false)
+  createdAt  DateTime @default(now())
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, guardianId])
+  @@index([tenantId])
+  @@map("guardian_link")
+}
