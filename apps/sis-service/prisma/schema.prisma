@@ -81,3 +81,30 @@ model GuardianLink {
   @@index([tenantId])
   @@map("guardian_link")
 }
+
+// Transactional outbox — the durable hop between "we updated the database"
+// and "we published the event". Producers write here in the SAME tx as the
+// state change (CreateStudentUseCase + others). The OutboxRelay polls and
+// publishes via Postgres NOTIFY.
+//
+// Tenant-scoped (RLS-enforced) so application code can ONLY append events
+// for its current tenant. The relay bypasses RLS via sms_app to see the
+// queue across all tenants.
+model OutboxEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @db.Uuid
+  aggregateId   String    @db.Uuid // e.g. studentId
+  aggregateType String // e.g. "Student"
+  eventType     String // e.g. "student.created"
+  payload       Json
+  // metadata carries the OTel traceparent (so the consumer continues the
+  // trace), tenantId for the consumer to restore via withTenant, schema
+  // version for forward compatibility.
+  metadata      Json      @default("{}")
+  occurredAt    DateTime  @default(now())
+  processedAt   DateTime?
+
+  @@index([processedAt, occurredAt]) // relay polling: WHERE processedAt IS NULL ORDER BY occurredAt
+  @@index([aggregateId, occurredAt]) // per-aggregate replay / debugging
+  @@map("outbox_event")
+}
