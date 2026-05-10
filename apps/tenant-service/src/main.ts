@@ -1,3 +1,4 @@
+import './instrumentation';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';

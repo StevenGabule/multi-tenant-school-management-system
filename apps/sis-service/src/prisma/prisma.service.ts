@@ -54,20 +54,35 @@ export class PrismaService
         `withTenant requires a valid UUID tenantId; got "${tenantId}"`,
       );
     }
-    // userId from CLS — populated by KeycloakAuthGuard. When present,
-    // the parent_abac_rls migration's policy uses it via
-    // app.current_user_id GUC for the parent-of-X visibility check.
-    // When absent (admin paths, internal jobs), the policy short-
-    // circuits to "no user-scope filter" — see migration comments.
+    // userId + roles from CLS — populated by KeycloakAuthGuard. The
+    // parent_abac_rls migration's policy filters Student rows by
+    // is_guardian_of when app.current_user_id is set. We ONLY set the
+    // GUC when the principal is acting as a parent (i.e., does NOT also
+    // have an admin/teacher role) — those broader roles need to see
+    // their tenant's full student list AND must be able to INSERT
+    // students (Prisma's RETURNING * triggers an implicit SELECT after
+    // the insert; if the new student's id isn't in guardian_link, the
+    // RETURNING fails with an RLS violation).
+    //
+    // The application-layer AuthzService still enforces parent-of-X
+    // explicitly for parent users — that's the load-bearing check.
+    // The RLS path is the floor for parent-only sessions.
     const userId = this.cls.get<string>('userId');
+    const roles = this.cls.get<string[]>('roles') ?? [];
+    const isPrivilegedRole = roles.some((r) =>
+      ['district-admin', 'school-admin', 'teacher'].includes(r),
+    );
+    const setParentGuc =
+      Boolean(userId) && !isPrivilegedRole && roles.includes('parent');
     return this.cls.run(async () => {
       this.cls.set('tenantId', tenantId);
       if (userId) this.cls.set('userId', userId);
+      if (roles.length > 0) this.cls.set('roles', roles);
       return this.$transaction(async (tx) => {
         await tx.$executeRawUnsafe(
           `SET LOCAL app.current_tenant_id = '${tenantId}'`,
         );
-        if (userId && UUID_RE.test(userId)) {
+        if (setParentGuc && userId && UUID_RE.test(userId)) {
           await tx.$executeRawUnsafe(
             `SET LOCAL app.current_user_id = '${userId}'`,
           );

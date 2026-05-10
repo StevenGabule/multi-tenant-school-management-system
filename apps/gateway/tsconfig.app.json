@@ -21,6 +21,9 @@
   ],
   "references": [
     {
+      "path": "../../libs/observability/tsconfig.lib.json"
+    },
+    {
       "path": "../../libs/auth-keycloak/tsconfig.lib.json"
     },
     {

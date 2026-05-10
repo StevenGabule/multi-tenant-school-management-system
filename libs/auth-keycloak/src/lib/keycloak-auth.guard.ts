@@ -5,6 +5,11 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import {
+  context as otelContext,
+  propagation,
+  trace,
+} from '@opentelemetry/api';
 import { ClsService } from 'nestjs-cls';
 import { KeycloakService } from './keycloak.service.js';
 import type {
@@ -115,6 +120,26 @@ export class KeycloakAuthGuard implements CanActivate {
     if (tenantId) this.cls.set('tenantId', tenantId);
     this.cls.set('userId', principal.userId);
     this.cls.set('roles', principal.roles);
+
+    // Propagate tenant + user context as OTel baggage so the collector
+    // can promote them onto every span/log. The "promote baggage to
+    // attributes" trick lives in the collector's attributes processor
+    // (see infra/observability/collector/config.yaml).
+    //
+    // Also stamp the active span directly — gives us coverage even if
+    // the baggage→attribute promotion is mis-configured for some signal.
+    const baggageEntries: Record<string, { value: string }> = {
+      'user.id': { value: principal.userId },
+    };
+    if (tenantId) baggageEntries['tenant.id'] = { value: tenantId };
+    const baggage = propagation.createBaggage(baggageEntries);
+    propagation.setBaggage(otelContext.active(), baggage);
+
+    const span = trace.getActiveSpan();
+    if (span) {
+      span.setAttribute('user.id', principal.userId);
+      if (tenantId) span.setAttribute('tenant.id', tenantId);
+    }
     return true;
   }
 }
