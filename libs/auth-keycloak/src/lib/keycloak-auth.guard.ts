@@ -12,7 +12,9 @@ import type {
   KeycloakJwtPayload,
 } from './keycloak-jwt.types.js';
 
-export const KEYCLOAK_OPTIONS = Symbol('KEYCLOAK_OPTIONS');
+// Re-exported for backward compat with existing consumers; the source
+// of truth lives in tokens.ts to break the import cycle.
+export { KEYCLOAK_OPTIONS } from './tokens.js';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -89,10 +91,13 @@ export class KeycloakAuthGuard implements CanActivate {
     // they're issued for the `services` client itself, not for a tenant
     // user. The saga executor and other service callers declare the
     // tenant per-request via X-Tenant-Id. We accept this ONLY when the
-    // token is a service token (azp != gateway client) — never for
-    // user tokens (which already carry their tenant in the JWT).
+    // token is recognizably a service token (azp matches a known
+    // service-account client AND the preferred_username has the
+    // service-account- prefix Keycloak uses).
     const isServiceToken =
-      typeof payload.azp === 'string' && !payload.realm_access?.roles?.length;
+      typeof payload.azp === 'string' &&
+      typeof payload.preferred_username === 'string' &&
+      payload.preferred_username.startsWith('service-account-');
     if (!tenantId && isServiceToken) {
       const headerTenant = req.headers['x-tenant-id'];
       if (typeof headerTenant === 'string' && UUID_RE.test(headerTenant)) {

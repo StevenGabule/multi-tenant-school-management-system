@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { JWTPayload, JWTVerifyResult, createRemoteJWKSet, jwtVerify } from 'jose';
-import { KEYCLOAK_OPTIONS } from './keycloak-auth.guard.js';
+import { KEYCLOAK_OPTIONS } from './tokens.js';
 import type { KeycloakJwtPayload } from './keycloak-jwt.types.js';
 
 interface KeycloakOptionsShape {

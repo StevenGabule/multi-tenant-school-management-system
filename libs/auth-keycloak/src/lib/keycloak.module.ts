@@ -1,6 +1,12 @@
-import { DynamicModule, Module, Provider } from '@nestjs/common';
-import { KEYCLOAK_OPTIONS, KeycloakAuthGuard } from './keycloak-auth.guard.js';
+import {
+  DynamicModule,
+  InjectionToken,
+  Module,
+  OptionalFactoryDependency,
+} from '@nestjs/common';
+import { KeycloakAuthGuard } from './keycloak-auth.guard.js';
 import { KeycloakService } from './keycloak.service.js';
+import { KEYCLOAK_OPTIONS } from './tokens.js';
 
 export interface KeycloakOptions {
   /** OIDC issuer URL — e.g. http://localhost:8080/realms/sms-platform */
@@ -13,7 +19,7 @@ export interface KeycloakOptions {
 
 export interface KeycloakAsyncOptions {
   imports?: NonNullable<DynamicModule['imports']>;
-  inject?: NonNullable<Provider['inject' & keyof Provider]>;
+  inject?: Array<InjectionToken | OptionalFactoryDependency>;
   useFactory: (...args: unknown[]) => Promise<KeycloakOptions> | KeycloakOptions;
 }
 
