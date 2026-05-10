@@ -1,0 +1,27 @@
+{
+  "name": "@org/bff-parent-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "bff-parent-e2e",
+    "implicitDependencies": [
+      "bff-parent"
+    ],
+    "targets": {
+      "e2e": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/test-output/jest/coverage"
+        ],
+        "options": {
+          "jestConfig": "apps/bff-parent-e2e/jest.config.cts",
+          "passWithNoTests": true
+        },
+        "dependsOn": [
+          "bff-parent:build",
+          "bff-parent:serve"
+        ]
+      }
+    }
+  }
+}

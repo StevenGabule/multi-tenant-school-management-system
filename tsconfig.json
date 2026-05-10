@@ -38,6 +38,12 @@
     },
     {
       "path": "./libs/auth-keycloak"
+    },
+    {
+      "path": "./apps/bff-parent-e2e"
+    },
+    {
+      "path": "./apps/bff-parent"
     }
   ]
 }

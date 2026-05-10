@@ -59,7 +59,8 @@
         "apps/tenant-service-e2e/**/*",
         "apps/sis-service-e2e/**/*",
         "apps/academic-service-e2e/**/*",
-        "apps/enrollment-service-e2e/**/*"
+        "apps/enrollment-service-e2e/**/*",
+        "apps/bff-parent-e2e/**/*"
       ]
     }
   ],
