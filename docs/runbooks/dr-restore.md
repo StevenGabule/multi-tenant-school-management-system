@@ -152,6 +152,67 @@ encryption with key custody.
 
 ---
 
+## 3.5. Re-apply per-database grants (drill-1 fix)
+
+`pg_dump` per-DB does NOT capture role-level GRANTs. `pg_restore`
+with `--no-owner --no-privileges` (which we use to keep ownership
+sane on the target) ALSO drops privileges. Result: app_user has no
+SELECT on the restored tables, services 500.
+
+Drill #1 (2026-05-10) caught this. The fix is two-layered:
+
+  - `dr-backup.sh` now also captures `pg_dumpall --globals-only` and
+    encrypts it as `globals.sql.enc`. Restoring it re-creates roles
+    + cluster-wide grants.
+  - This step explicitly re-runs the per-DB GRANTs as a defense-in-
+    depth backstop. Roles capture cluster-level state; some grants
+    live in per-DB migrations.
+
+```bash
+# Restore the cluster globals (one time per restore session, not per DB).
+GLOBALS_DIR=$(mktemp -d)
+docker run --rm --network sms_default \
+  -v "$GLOBALS_DIR:/work" \
+  -e MC_HOST_local="http://sms_backup_admin:local_dev_only_change_me_for_minio@minio:9000" \
+  quay.io/minio/mc:RELEASE.2024-10-08T09-37-26Z \
+  cp "local/sms-backups/base/$TIMESTAMP/globals.sql.enc" /work/ \
+  "local/sms-backups/base/$TIMESTAMP/globals.dek.wrapped" /work/
+
+# Unwrap + decrypt
+openssl enc -aes-256-cbc -pbkdf2 -d \
+  -in "$GLOBALS_DIR/globals.dek.wrapped" -out "$GLOBALS_DIR/globals.dek.plain" \
+  -pass file:./infra/backup/dev-kek.bin
+openssl enc -aes-256-cbc -pbkdf2 -d \
+  -in "$GLOBALS_DIR/globals.sql.enc" -out "$GLOBALS_DIR/globals.sql" \
+  -pass file:"$GLOBALS_DIR/globals.dek.plain"
+
+# Apply globals (idempotent — roles already exist will be skipped with
+# warnings, which we ignore).
+docker run --rm --network sms_default -v "$GLOBALS_DIR:/work" \
+  -e PGPASSWORD=local_dev_only_change_me_when_you_can postgres:16-alpine \
+  psql -h postgres -p 5432 -U sms_app -d postgres -f /work/globals.sql || true
+
+rm -rf "$GLOBALS_DIR"
+
+# Per-DB GRANTs as backstop (defense in depth for grants that live in
+# per-DB migration SQL).
+docker run --rm --network sms_default \
+  -e PGPASSWORD=local_dev_only_change_me_when_you_can postgres:16-alpine \
+  psql -h postgres -p 5432 -U sms_app -d "$TARGET_DB" <<'SQL'
+GRANT USAGE ON SCHEMA public TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app_user;
+-- per-service additions: SECURITY DEFINER functions etc.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+             WHERE n.nspname='app' AND p.proname='is_guardian_of') THEN
+    GRANT EXECUTE ON FUNCTION app.is_guardian_of(uuid, uuid) TO app_user;
+  END IF;
+END$$;
+SQL
+```
+
 ## 4. Verification
 
 After restore completes, verify the data:
@@ -173,29 +234,47 @@ docker run --rm --network sms_default \
     UNION ALL SELECT 'guardian_link', COUNT(*) FROM guardian_link;
   "
 
-# 3. Hash comparison (drill only — skip in real restore unless the
-#    pre-drill snapshot is meaningful).
-docker exec sms-postgres pg_dump -U sms_app "$TARGET_DB" \
-  | sort | sha256sum > /tmp/post-restore-$TARGET_DB.sha256
-diff /tmp/pre-drill-$DB.sha256 /tmp/post-restore-$TARGET_DB.sha256 \
-  && echo OK || echo MISMATCH
+# 3. Per-table aggregation comparison (drill only). Drill #1 lesson:
+#    pg_dump's `sort | sha256sum` ALSO captures session-specific
+#    metadata (`-- Started on <ts>`, SET statements with cluster
+#    state) that varies per run, producing false mismatches for
+#    bit-identical data. Use row-count + per-column aggregation
+#    instead — same data, real test, no metadata noise.
+docker run --rm --network sms_default \
+  -e PGPASSWORD=local_dev_only_change_me_when_you_can postgres:16-alpine \
+  psql -h postgres -U sms_app -d "$TARGET_DB" -tAc "
+    SELECT 'student'         AS t, COUNT(*), MAX(\"createdAt\") FROM student
+    UNION ALL SELECT 'guardian',         COUNT(*), MAX(\"createdAt\") FROM guardian
+    UNION ALL SELECT 'guardian_link',    COUNT(*), MAX(\"createdAt\") FROM guardian_link
+    UNION ALL SELECT 'outbox_event',     COUNT(*), MAX(\"occurredAt\") FROM outbox_event
+    UNION ALL SELECT 'processed_request',COUNT(*), MAX(\"createdAt\") FROM processed_request;
+  " > /tmp/post-restore-$TARGET_DB.agg
+# Diff against the pre-drill aggregation captured in Step 2's pre-restore
+# checklist. Match = data is intact; mismatch = investigate which
+# table differs.
 ```
 
-**Hash mismatch in a drill** = backup is missing data the live DB
-contained at snapshot time. Common causes:
-- WAL archiving wasn't running, so writes after the last base backup
-  are lost. **This is the expected RPO of pg_dump-based DR.**
+**Aggregation mismatch in a drill** = backup is missing data the live
+DB contained at snapshot time. Common causes:
+- pg_dump-based DR has no WAL replay, so writes between the last base
+  backup and the drop are lost. **This is the expected RPO of Phase-1
+  DR.** ADR-0019 documents the trade-off.
 - Backup completed between writes, so the base captures pre-write
   state for some rows and post-write for others.
 
-**Hash match** = restored data is bit-identical to the snapshot. The
-drill is a success.
+**Aggregation match** = restored data is identical to the snapshot
+at the row + recency level we care about. The drill is a success.
 
 ---
 
 ## 5. Resume traffic
 
 ```bash
+# Drill #1 lesson: if Step 1's cordon used `kill` (Phase-1 single-host),
+# nx daemon may hold a stale serve lock — `nx reset` clears it.
+# Phase-2 k8s deploys via kubectl scale and don't need this.
+pnpm exec nx reset
+
 # Restart services
 pnpm exec nx serve @org/tenant-service > /tmp/ts.log 2>&1 &
 pnpm exec nx serve @org/sis-service > /tmp/sis.log 2>&1 &

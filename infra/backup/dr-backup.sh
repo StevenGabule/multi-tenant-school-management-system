@@ -124,6 +124,33 @@ done
 
 echo "]}" >> "$MANIFEST"
 
+# pg_dumpall --globals-only — captures cluster-wide ROLE definitions
+# + cluster-level GRANTs that per-DB pg_dump misses. Drill #1 lesson:
+# without this, the restored DB has tables but no app_user privileges.
+# Encrypted with the SAME envelope scheme so a globals-restore needs
+# the KEK too.
+echo "    -> globals (pg_dumpall --globals-only)"
+GLOBALS_FILE="$WORKDIR/globals.sql"
+GLOBALS_DEK_FILE="$WORKDIR/globals.dek.plain"
+docker run --rm \
+  --network sms_default \
+  -e PGPASSWORD="$PG_PASS" \
+  -v "$WORKDIR:/work" \
+  postgres:16-alpine \
+  pg_dumpall \
+    -h postgres -p 5432 -U "$PG_USER" \
+    --globals-only --no-role-passwords \
+    --file=/work/globals.sql
+openssl rand -base64 32 > "$GLOBALS_DEK_FILE"
+openssl enc -aes-256-cbc -pbkdf2 -salt \
+  -in "$GLOBALS_FILE" -out "$WORKDIR/globals.sql.enc" \
+  -pass file:"$GLOBALS_DEK_FILE"
+openssl enc -aes-256-cbc -pbkdf2 -salt \
+  -in "$GLOBALS_DEK_FILE" -out "$WORKDIR/globals.dek.wrapped" \
+  -pass file:"$KEK_PATH"
+shred -u "$GLOBALS_DEK_FILE" "$GLOBALS_FILE" 2>/dev/null \
+  || rm -f "$GLOBALS_DEK_FILE" "$GLOBALS_FILE"
+
 # Remove plaintext dumps + per-DB plaintext hashes from the workdir
 # BEFORE the upload — only the encrypted artifacts and the manifest
 # (which carries the hashes) should reach the bucket.
@@ -132,7 +159,8 @@ for DB in "${DBS_TO_BACKUP[@]}"; do
   rm -f "$WORKDIR/$DB.sha256"
 done
 
-# Push remaining artifacts (encrypted dumps + wrapped DEKs + manifest).
+# Push remaining artifacts (encrypted dumps + wrapped DEKs + manifest +
+# encrypted globals).
 mc cp --recursive /work/ "local/$S3_BUCKET/base/$TIMESTAMP/" >/dev/null
 
 echo
